@@ -1,0 +1,17 @@
+target/
+node_modules/
+.pnpm-store/
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# napi-rs generated (packages/perrr)
+packages/perrr/index.js
+packages/perrr/index.d.ts
+packages/perrr/*.node
+packages/perrr/npm/
+
+# build artifacts
+dist/
+*.tsbuildinfo

@@ -1,0 +1,39 @@
+{
+  "name": "perrr",
+  "version": "0.1.0",
+  "description": "Native Vitest environment with real DOM, real CSS cascade, real layout, and a virtual frame scheduler.",
+  "license": "MIT",
+  "repository": "https://github.com/justinschmitz97/perrr",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "perrr.*.node"
+  ],
+  "napi": {
+    "binaryName": "perrr",
+    "targets": [
+      "x86_64-pc-windows-msvc",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release --manifest-path ../../crates/perrr-node/Cargo.toml --package-json-path ./package.json --output-dir .",
+    "build:debug": "napi build --platform --manifest-path ../../crates/perrr-node/Cargo.toml --package-json-path ./package.json --output-dir .",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  }
+}

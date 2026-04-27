@@ -1,0 +1,20 @@
+{
+  "name": "perrr-dom-shim",
+  "version": "0.1.0",
+  "description": "JS-side window/document/HTMLElement classes backed by perrr NodeId handles.",
+  "license": "MIT",
+  "repository": "https://github.com/justinschmitz97/perrr",
+  "main": "./index.js",
+  "files": ["index.js"],
+  "peerDependencies": {
+    "perrr": "workspace:*"
+  },
+  "scripts": {
+    "build": "node -e \"console.log('perrr-dom-shim: M1 stub; real build arrives in M2')\"",
+    "build:debug": "node -e \"console.log('perrr-dom-shim: M1 stub; real build arrives in M2')\"",
+    "test": "node -e \"console.log('perrr-dom-shim: M1 stub; no tests yet')\""
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

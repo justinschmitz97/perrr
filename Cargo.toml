@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/perrr-dom",
+    "crates/perrr-style",
+    "crates/perrr-layout",
+    "crates/perrr-paint",
+    "crates/perrr-scheduler",
+    "crates/perrr-perf",
+    "crates/perrr-thrash",
+    "crates/perrr-node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/justinschmitz97/perrr"
+
+[workspace.dependencies]
+napi = { version = "3", default-features = false, features = ["napi4"] }
+napi-derive = "3"
+napi-build = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
