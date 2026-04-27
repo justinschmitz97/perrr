@@ -56,7 +56,7 @@ last-reviewed: 2026-04-27
 | package | role |
 |---|---|
 | perrr | public npm facade + prebuilt binary install |
-| perrr-vitest | Vitest environment export |
+| vitest-environment-perrr | Vitest environment export (renamed from `perrr-vitest` per ADR 0003) |
 | perrr-dom-shim | JS classes (window, document, HTMLElement …) over `NodeId` |
 
 ## Tech
@@ -106,3 +106,4 @@ last-reviewed: 2026-04-27
 
 ## Changelog
 - 2026-04-27: approved snapshot.
+- 2026-04-28: renamed package `perrr-vitest` → `vitest-environment-perrr` to match Vitest 4's environment resolution convention (see ADR 0003).
