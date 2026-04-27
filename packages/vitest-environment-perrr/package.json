@@ -1,0 +1,26 @@
+{
+  "name": "vitest-environment-perrr",
+  "version": "0.1.0",
+  "description": "Vitest environment that runs tests against perrr's native DOM + layout + frame scheduler.",
+  "license": "MIT",
+  "repository": "https://github.com/justinschmitz97/perrr",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": ["index.js"],
+  "peerDependencies": {
+    "perrr": "workspace:*",
+    "perrr-dom-shim": "workspace:*",
+    "vitest": ">=4"
+  },
+  "scripts": {
+    "build": "node -e \"console.log('vitest-environment-perrr: M2a stub; minimal env for red test')\"",
+    "build:debug": "node -e \"console.log('vitest-environment-perrr: M2a stub')\"",
+    "test": "node -e \"console.log('vitest-environment-perrr: no own tests at M2a')\""
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

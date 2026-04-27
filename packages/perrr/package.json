@@ -25,15 +25,27 @@
   "scripts": {
     "build": "napi build --platform --release --manifest-path ../../crates/perrr-node/Cargo.toml --package-json-path ./package.json --output-dir .",
     "build:debug": "napi build --platform --manifest-path ../../crates/perrr-node/Cargo.toml --package-json-path ./package.json --output-dir .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:acceptance": "vitest run --config ./vitest.acceptance.config.ts"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.6.2",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "lucide-react": "^0.469.0",
+    "motion": "^12.0.0",
+    "perrr-dom-shim": "workspace:*",
+    "radix-ui": "^1.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.8",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "vitest-environment-perrr": "workspace:*"
   }
 }

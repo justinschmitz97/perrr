@@ -21,7 +21,7 @@ last-reviewed: 2026-04-27
 - Unblock metrics jsdom-limited in `fixtures/acceptance/accordion.bench.tsx`.
 
 ## v0.1 acceptance
-- A1: `accordion.test.tsx` (36 cases) green under `environment: "perrr"`, zero source changes.
+- A1: `accordion.test.tsx` (39 cases) green under `environment: "perrr"`, zero source changes.
 - A2: `accordion.bench.tsx` completes all 22 suites; reconciliation-bound suites within ±15% of jsdom; animation-bound suites CV<10% across 5 runs.
 - A3: CLS assertion `expect(cls).toBeLessThan(0.1)` fails on layout-shift fixture, passes on reserved-height fixture.
 - A4: `perrr-node` cold-starts <50 ms on win/mac/linux × x64/arm64.
@@ -107,3 +107,4 @@ last-reviewed: 2026-04-27
 ## Changelog
 - 2026-04-27: approved snapshot.
 - 2026-04-28: renamed package `perrr-vitest` → `vitest-environment-perrr` to match Vitest 4's environment resolution convention (see ADR 0003).
+- 2026-04-28: corrected accordion.test.tsx case count 36 → 39 (measured under vitest 4.1.5 run; original number was a static-read estimate).

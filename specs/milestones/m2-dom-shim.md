@@ -17,7 +17,7 @@ last-reviewed: 2026-04-28
 ---
 
 ## Purpose
-- Stand up a native-backed DOM sufficient to run `accordion.test.tsx` (36 cases) green under a perrr-powered Vitest environment.
+- Stand up a native-backed DOM sufficient to run `accordion.test.tsx` (39 cases) green under a perrr-powered Vitest environment.
 - No style, no layout, no paint. Behavior-only DOM.
 - Load-bearing milestone: establishes the handle-based boundary, the JS facade pattern, and the Vitest env bootstrap that every later milestone rides on.
 
@@ -26,7 +26,7 @@ last-reviewed: 2026-04-28
 - Expected failure before implementation: `ReferenceError: document is not defined` OR `TypeError: document.createElement is not a function`.
 
 ## Done-when
-- All 36 `accordion.test.tsx` cases green under `environment: "perrr"`, zero source changes to the fixture.
+- All 39 `accordion.test.tsx` cases green under `environment: "perrr"`, zero source changes to the fixture.
 - `specs/overview/03-dom-api-coverage.md` populated with every DOM API the fixture actually touches; each marked `supported` or `stubbed`.
 - `crates/perrr-dom/tests/tree_invariants.rs` passes: parent/child consistency, NodeId stability, op-buffer flush semantics (`proptest`).
 - `cargo test --workspace` + `cargo clippy -- -D warnings` + `cargo fmt --check` clean.
@@ -149,3 +149,4 @@ last-reviewed: 2026-04-28
 ## Changelog
 - 2026-04-28: initial.
 - 2026-04-28: added vitest-environment-perrr rename (ADR 0003), dedicated fixture vitest config with path aliases, and list of required npm devDeps.
+- 2026-04-28: M2a red stage validated. Env stub + `.npmrc` shamefully-hoist + vitest.acceptance.config.ts landed; `pnpm -F perrr test:acceptance` produces the expected 39/39 failures with `ReferenceError: document is not defined`. Case count corrected 36 → 39 across specs (actual vitest run count).
