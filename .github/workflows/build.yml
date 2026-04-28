@@ -76,9 +76,14 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: ${{ matrix.settings.docker }}
-          options: -v ${{ github.workspace }}:/build -w /build
+          # napi-rs's arm64-aarch64 / alpine docker images ship an older
+          # corepack that fails on pnpm's current signing key
+          # (COREPACK_INTEGRITY_KEYS error). Bypass corepack entirely
+          # and install pnpm directly with the exact version from
+          # package.json's packageManager field.
+          options: -v ${{ github.workspace }}:/build -w /build -e COREPACK_ENABLE_STRICT=0
           run: |
-            corepack enable
+            npm install -g pnpm@10.33.2
             pnpm install --frozen-lockfile
             pnpm -F perrr build -- --target ${{ matrix.settings.target }}
       - name: Test
