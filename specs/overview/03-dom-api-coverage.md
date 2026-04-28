@@ -27,8 +27,13 @@ last-reviewed: 2026-04-28
 - `fail-loud` — calling it throws `perrr: unimplemented`; add to this list when hit by a test.
 - `deferred-mN` — will be supported starting at milestone `N`.
 
+## Backend reality at M2
+- **Current JS DOM backend:** happy-dom (via `@happy-dom/global-registrator`). All browser APIs below are answered by happy-dom.
+- **perrr-dom native implementation:** available, measured equivalent to happy-dom for the mutation + selector surface the accordion fixture exercises (see `specs/packages/perrr-dom-shim/spec.md` §Measured outcome). NOT yet primary backend for JS code.
+- **Facade native swap (M2c):** pending. When it lands, the rows below marked `native-ready` become the primary backend; `happy-dom` column retires.
+
 ## Static pre-pass (from fixture reading)
-_Not authoritative. Will be superseded by M2a harvest._
+_Frozen pre-M2a snapshot. Superseded by the dynamic-harvest section below for authoritative call frequencies and by `specs/crates/perrr-dom/spec.md` for what's implemented natively. Status values in this section marked (M2) mean "satisfied today via happy-dom"; see the M2c column in the Tier tables below for native readiness._
 
 ### Tree mutation
 | API | status | notes |
@@ -258,13 +263,29 @@ _(known-called by observation; harvest missed them due to PROTOTYPE_KEYS walker 
 
 All of Tier 1+2 reachability implies these ARE called; M2c implementation plan covers them explicitly.
 
+## Native-readiness snapshot (end of round 4e.vi)
+
+| surface | native in perrr-dom? | measured-equivalent-to-HD? |
+|---|---|---|
+| Tree mutation (appendChild, insertBefore, removeChild, replaceChild-via-insert+remove, setAttribute, removeAttribute, toggleAttribute, CharacterData data/nodeValue setters, Element.textContent setter) | ✓ | ✓ (4,351 strict-mode per-op diffs, 0 divergence) |
+| Metadata reads (nodeType, localName, tagName, nodeName, namespaceURI, parentNode, parentElement, ownerDocument, rootNode, first/last/next/previous/childNodes, contains) | ✓ | indirect (shape checks catch any difference) |
+| Attribute ops (getAttribute, hasAttribute, setAttribute, removeAttribute, attributeNames, idAttr) | ✓ (HTML lowercase; SVG preserves case) | ✓ (H8 regression test + strict shape check) |
+| Selector queries (matches, querySelector, querySelectorAll, closest) | ✓ | ✓ (5,637 real-fixture queries + ~500 fuzz queries; one HD bug found — see H2) |
+| Focus tracking (focus, blur, activeElement) | ✓ | partial (H9 open — activeElement not differentially compared) |
+| Text content | ✓ | ✓ (after H1d fix; 158 previously-unmirrored setter calls now verified per-op) |
+| Listener counter (incrListener, decrListener, listenerCount, totalListenerCount) | ✓ | no HD equivalent (perrr-specific metric for M8) |
+| Event dispatch (addEventListener, removeEventListener, dispatchEvent, capture/target/bubble, preventDefault, stopPropagation) | ✗ | ✗ (H10 open — deferred to event-system milestone) |
+| Layout APIs (getBoundingClientRect, offsetWidth/Height, clientWidth/Height, scrollWidth/Height) | ✗ | ✗ (stubbed zeros; M4 work) |
+| getComputedStyle | ✗ | ✗ (stubbed; M3 work) |
+| MutationObserver / ResizeObserver / IntersectionObserver / PerformanceObserver | ✗ | ✗ (noop stubs; M7 for PerformanceObserver, later for others if fixtures demand) |
+
 ## Plan for M2c ordering
-1. Tier 1 native ops (19 APIs) — establishes the fast path.
-2. Tier 2 reads + top mutations (~25 APIs).
-3. Gap-list Document-level APIs.
-4. Tier 3 events + focus + queries (~23 APIs).
-5. Tier 4 edge cases (4 APIs).
+1. Swap facade to route reads through perrr-dom for already-native APIs; run dual-mode acceptance; expect zero divergence (shape + query already proven).
+2. Implement event dispatch in perrr-dom (addEventListener/removeEventListener/dispatchEvent with capture/target/bubble). Close H10.
+3. Add activeElement read-side parity check in dual harness (close H9).
+4. Uninstall happy-dom from the env; run acceptance. Fix any new divergence.
 
 ## Changelog
 - 2026-04-28: initial static pre-pass (pre-M2a).
 - 2026-04-28: dynamic harvest from 4b/4c landed. 72 unique APIs, 121,833 calls, sorted into 4 tiers. Status moved from draft → approved. Pre-M2a static table now superseded by tiers below.
+- 2026-04-28: added §Backend reality at M2 to clarify that "(M2)" status in the static pre-pass currently means "happy-dom-backed", not natively implemented. Added native-readiness snapshot table reflecting perrr-dom's actual implementation state at end of round 4e.vi.

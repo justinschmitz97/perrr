@@ -108,3 +108,4 @@ last-reviewed: 2026-04-27
 - 2026-04-27: approved snapshot.
 - 2026-04-28: renamed package `perrr-vitest` → `vitest-environment-perrr` to match Vitest 4's environment resolution convention (see ADR 0003).
 - 2026-04-28: corrected accordion.test.tsx case count 36 → 39 (measured under vitest 4.1.5 run; original number was a static-read estimate).
+- 2026-04-28: added `specs/overview/05-hypotheses.md` as an adversarial-review log per user directive; surfaces low-confidence claims as falsifiable hypotheses. Session ended with 2 real perrr-dom bugs found + fixed (textContent mirror; HTML attribute case-sensitivity) and 1 HD bug documented (`button ~ a` duplicate match). 4,351 tree-shape + 5,637 query equivalence assertions against happy-dom, zero deltas.

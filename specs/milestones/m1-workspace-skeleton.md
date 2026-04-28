@@ -23,7 +23,7 @@ last-reviewed: 2026-04-27
 ## Contract
 ### MUST
 - Cargo workspace with empty crates: `perrr-dom`, `perrr-style`, `perrr-layout`, `perrr-paint`, `perrr-scheduler`, `perrr-perf`, `perrr-thrash`, `perrr-node`.
-- pnpm workspace with empty packages: `perrr`, `perrr-vitest`, `perrr-dom-shim`.
+- pnpm workspace with empty packages: `perrr`, `vitest-environment-perrr` (initially `perrr-vitest`; renamed in M2a per ADR 0003), `perrr-dom-shim`.
 - `perrr-node` exports `hello() -> "ok"` (napi-rs `#[napi]`).
 - `packages/perrr` reexports from `perrr-node`; `require("perrr").hello() === "ok"`.
 - GitHub Actions builds prebuilts for 6 target triples; uploads to workflow artifacts.
@@ -53,8 +53,8 @@ last-reviewed: 2026-04-27
 - Layout: see `specs/overview/00-tdd.md` Architecture.
 - CI: single workflow `.github/workflows/build.yml`; matrix job per target triple; cache `target/` + pnpm store.
 - Package manager: pnpm 9+.
-- Rust: stable; version pinned in `rust-toolchain.toml`.
-- napi-rs: 2.x; `@napi-rs/cli` drives build + per-platform package generation.
+- Rust: pinned to `1.95.0` in `rust-toolchain.toml` (2026-04-28 bump from 1.85; latest stable at kickoff).
+- napi-rs: `@napi-rs/cli ^3.6.2` + `napi`/`napi-derive` `^3`; `@napi-rs/cli` drives build + per-platform package generation.
 
 ## Target triples (M1 CI matrix)
 | triple | runner |
@@ -67,12 +67,12 @@ last-reviewed: 2026-04-27
 | x86_64-unknown-linux-musl | ubuntu-latest (cross) |
 
 ## Done-when
-- `pnpm install && pnpm build && pnpm test` green locally on Windows.
-- CI green on all 6 target triples.
-- Prebuilt `.node` artifacts downloadable from the workflow run.
-- `specs/crates/perrr-node/spec.md` created (minimal: documents `hello()` contract).
-- PR body contains `Spec updated: specs/crates/perrr-node/spec.md, specs/milestones/m1-workspace-skeleton.md`.
-- On merge: `specs/milestones/m1-workspace-skeleton.md` → `specs/milestones/archive/m1-workspace-skeleton.md`.
+- [x] `pnpm install && pnpm build && pnpm test` green locally on Windows.
+- [ ] CI green on all 6 target triples. _(Pending — no remote configured yet.)_
+- [ ] Prebuilt `.node` artifacts downloadable from the workflow run. _(Blocked by above.)_
+- [x] `specs/crates/perrr-node/spec.md` created.
+- [x] PR-equivalent commit messages contain the `Spec updated:` line.
+- [ ] On merge: archive spec. _(Blocked by no-remote; M1 scope verified locally but not yet "merged" in the git sense.)_
 
 ## Tests
 - `crates/perrr-node/tests/hello.rs` — `#[test] assert_eq!(hello(), "ok");`
@@ -87,3 +87,4 @@ last-reviewed: 2026-04-27
 - 2026-04-28: pinned Rust `1.85.0` in `rust-toolchain.toml`; pinned `@napi-rs/cli` `^3.0.0`. Remaining open items collapsed to musl inclusion only.
 - 2026-04-28: bumped to latest stable everywhere (Rust `1.95.0`; `napi` / `napi-derive` Rust crates `^3`). Reason: `napi-build@2.3.1` requires rustc ≥1.88; also aligns with project policy of tracking current stable.
 - 2026-04-28: added explicit `vite ^8.0.8` devDep to `packages/perrr`. Reason: Vitest 4 peer-depends on Vite 6/7/8; pnpm resolved a transitive Vite 5 which broke `./module-runner` export at runtime.
+- 2026-04-28: done-when status updated — local criteria satisfied; CI/remote criteria remain blocked pending git remote. Spec stays `approved` until archival on merge.

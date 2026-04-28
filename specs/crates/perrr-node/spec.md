@@ -9,6 +9,7 @@ related:
 tests:
   - crates/perrr-node/tests/hello.rs
   - packages/perrr/test/smoke.test.ts
+  - packages/perrr/test/dom.test.ts
 last-reviewed: 2026-04-28
 ---
 
@@ -50,18 +51,20 @@ last-reviewed: 2026-04-28
 - `build.rs`: `napi_build::setup()`.
 - Per-instance state (no globals). Each test context holds one `PerrrDom`; JS-side lifetime managed by GC + explicit teardown.
 
-## Exported surface (4d.ii)
+## Exported surface
 - Free fn: `hello() -> string`.
-- `PerrrDom` class methods (all camelCased by napi-rs):
+- `PerrrDom` class methods (all camelCased by napi-rs; per-instance state, no globals):
   - ids: `documentId()`, `ownerDocument(n)`, `rootNode(n)`, `activeElement()`
-  - create: `createElement`, `createElementNS`, `createTextNode`, `createComment`, `createDocumentFragment`
+  - create: `createElement`, `createElementNs`, `createTextNode`, `createComment`, `createDocumentFragment`
   - meta: `nodeType`, `localName`, `tagName`, `namespaceUri`, `nodeName`
   - attrs: `getAttribute`, `hasAttribute`, `setAttribute`, `removeAttribute`, `attributeNames`, `idAttr`
   - walk: `parentNode`, `parentElement`, `children`, `firstChild`, `lastChild`, `nextSibling`, `previousSibling`, `contains`
   - mutate: `appendChild`, `insertBefore`, `removeChild`, `freeNode`
   - text: `textContent`, `setTextContent`, `nodeData`, `setNodeData`
+  - selectors: `matches`, `querySelector`, `querySelectorAll`, `closest` (added 4e.i; parse errors surface as `napi::Error` with `Status::InvalidArg`)
   - focus: `focus`, `blur`
   - metric: `incrListener`, `decrListener`, `listenerCount`, `totalListenerCount`
+- `#[napi(object)] AttrRecord { name, value }` DTO (reserved for future `getAttributeNode`-style ops).
 
 ## Target triples (v0.1)
 | rust triple | npm target |
@@ -76,6 +79,7 @@ last-reviewed: 2026-04-28
 ## Tests
 - `crates/perrr-node/tests/hello.rs` — `#[test] assert_eq!(perrr_node::hello(), "ok");`
 - `packages/perrr/test/smoke.test.ts` — `expect(hello()).toBe("ok");`
+- `packages/perrr/test/dom.test.ts` — 14 JS unit cases exercising the `PerrrDom` napi surface end-to-end: tree ops, attribute round-trip, siblings, textContent, focus, listener counter, selector match/query/closest, parse-error propagation.
 
 ## Open
 - _(none)_
@@ -84,3 +88,4 @@ last-reviewed: 2026-04-28
 - 2026-04-28: initial.
 - 2026-04-28: pinned `@napi-rs/cli` to `^3.0.0` (v2 CLI lacks `--manifest-path`; v3 required for split crate/package layout).
 - 2026-04-28: added `PerrrDom` class wrapping `perrr_dom::Tree` with Tier 1+2 surface (32 methods). Validated by 11 JS unit tests in `packages/perrr/test/dom.test.ts`.
+- 2026-04-28: added selector ops (`matches`, `querySelector`, `querySelectorAll`, `closest`) — round 4e.i. Parse errors surface as napi errors with preserved message. 2 additional JS unit tests; 14 total in `dom.test.ts`.

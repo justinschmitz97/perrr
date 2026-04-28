@@ -11,8 +11,14 @@ related:
   - specs/packages/perrr-dom-shim/spec.md
 tests:
   - fixtures/acceptance/components/accordion.test.tsx
+  - crates/perrr-dom/tests/basic.rs
   - crates/perrr-dom/tests/tree_invariants.rs
-  - packages/perrr-dom-shim/test/facade.test.ts
+  - crates/perrr-dom/tests/selectors.rs
+  - crates/perrr-dom/tests/attr_case.rs
+  - crates/perrr-dom/tests/stale_ids.rs
+  - packages/perrr/test/dom.test.ts
+  - packages/perrr/test/dual-sanity.test.ts
+  - packages/perrr/test/selector-fuzz.test.ts
 last-reviewed: 2026-04-28
 ---
 
@@ -26,13 +32,15 @@ last-reviewed: 2026-04-28
 - Expected failure before implementation: `ReferenceError: document is not defined` OR `TypeError: document.createElement is not a function`.
 
 ## Done-when
-- All 39 `accordion.test.tsx` cases green under `environment: "perrr"`, zero source changes to the fixture.
-- `specs/overview/03-dom-api-coverage.md` populated with every DOM API the fixture actually touches; each marked `supported` or `stubbed`.
-- `crates/perrr-dom/tests/tree_invariants.rs` passes: parent/child consistency, NodeId stability, op-buffer flush semantics (`proptest`).
-- `cargo test --workspace` + `cargo clippy -- -D warnings` + `cargo fmt --check` clean.
-- `pnpm -F perrr build` produces updated `.node` with new exports.
-- `specs/milestones/m2-dom-shim.md` → `specs/milestones/archive/` on merge.
-- PR body: `Spec updated: specs/milestones/m2-dom-shim.md, specs/crates/perrr-dom/spec.md, specs/packages/perrr-dom-shim/spec.md, specs/overview/03-dom-api-coverage.md`.
+- [x] All 39 `accordion.test.tsx` cases green under `environment: "perrr"`, zero source changes to the fixture. *(Currently passing via happy-dom backend; native swap pending.)*
+- [x] `specs/overview/03-dom-api-coverage.md` populated with every DOM API the fixture actually touches (72 APIs, 4 tiers).
+- [x] `crates/perrr-dom/tests/tree_invariants.rs` passes (parent/child consistency, free_node descendants, NodeKind discriminants).
+- [x] `cargo test --workspace` + `cargo clippy -- -D warnings` + `cargo fmt --check` clean.
+- [x] `pnpm -F perrr build` produces the `.node` with all PerrrDom exports.
+- [ ] **happy-dom uninstalled from the env; accordion passes on pure perrr-dom.** *(Not yet done. The dual harness measures equivalence; the swap itself is future work.)*
+- [ ] Event dispatch implemented natively (close H10).
+- [ ] `specs/milestones/m2-dom-shim.md` → `specs/milestones/archive/` on merge.
+- [ ] PR body: `Spec updated: ...`.
 
 ## Approach (four sub-phases)
 
@@ -100,34 +108,24 @@ last-reviewed: 2026-04-28
 - Thrash detector → M8.
 - User-configurable options (viewport, frameRateHz, deterministic) → M9.
 
-## Design sketch
-- `perrr-dom` crate:
-  - `Tree` owns nodes in a `SlotMap<NodeId, Node>`.
-  - `Node { parent: Option<NodeId>, children: Vec<NodeId>, kind: NodeKind, attrs, listeners }`.
-  - Event dispatch: iterative, allocation-free for the hot path.
-  - All APIs thread-unsafe by design (one Tree per V8 isolate); N-API boundary is the serialization point.
-- `perrr-node` re-exports each tree op as `#[napi]`.
-- `perrr-dom-shim` JS:
-  - `class Node`, `class Element extends Node`, `class HTMLElement extends Element`, etc.
-  - Each instance holds `{ nodeId: number }` and delegates method calls to `perrr-node`.
-  - Static `Document` class; singleton per test context.
-- `vitest-environment-perrr` (renamed from `perrr-vitest` per ADR 0003):
-  - Exports `{ name: "perrr", transformMode: "web", setup(ctx), teardown(ctx) }` matching Vitest 4 environment contract.
-  - `setup` installs globals (document, window, HTMLElement, …); `teardown` resets the tree.
-  - Folder rename `packages/perrr-vitest/` → `packages/vitest-environment-perrr/` lands in M2's first commit.
-- Dedicated fixture runner config at `packages/perrr/vitest.acceptance.config.ts`:
-  - `environment: "perrr"`.
-  - `resolve.alias`: `@/lib/*` → `../../fixtures/acceptance/lib/*`, `@/bench/*` → `../../fixtures/acceptance/bench/*`.
-  - `include: ["../../fixtures/acceptance/components/**/*.test.tsx"]`.
-  - Root `vitest.config.ts` stays on `node` environment for the M1 smoke test.
-- New npm devDeps in `packages/perrr` for running the acceptance fixture:
-  - `react@^19`, `react-dom@^19` — React 19 per fixture.
-  - `@testing-library/react@^16` — RTL for React 19.
-  - `@testing-library/user-event@^14` — synthetic events.
-  - `radix-ui@latest` — Accordion primitives.
-  - `motion@^12` — motion/react.
-  - `lucide-react@latest` — ChevronDownIcon.
-  - Exact versions resolved at M2a start per project policy (latest stable).
+## Design sketch (as implemented)
+- `perrr-dom` crate (see `specs/crates/perrr-dom/spec.md`):
+  - `Tree` owns nodes in `Vec<Option<Node>>` with a free list; no SlotMap.
+  - `NodeKind` is a unit enum with `#[repr(u8)]` discriminants; associated data on `Node` struct.
+  - Event dispatch NOT yet implemented — listener counter only.
+  - All APIs thread-unsafe by design; one Tree per test context.
+- `perrr-node` re-exports Tree ops as `#[napi]` methods on the `PerrrDom` class (see `specs/crates/perrr-node/spec.md`).
+- **`perrr-dom-shim` (current M2 reality, not original plan):**
+  - Does NOT ship JS-side facade classes. Instead, wraps `@happy-dom/global-registrator`.
+  - Provides three parallel observation modes: normal, harvest (`PERRR_HARVEST=1`), dual (`PERRR_DUAL=1` / `PERRR_DUAL_STRICT=1`).
+  - Dual harness mirrors every hooked mutation on HD to perrr-dom and compares. This is how we've measured equivalence across 4,351 mutations + 5,637 queries.
+  - Facade-native swap is M2c work; still pending.
+- `vitest-environment-perrr` (renamed per ADR 0003):
+  - Exports `{ name: "perrr", viteEnvironment: "client", setup, teardown }` matching Vitest 4's Environment type.
+  - Setup installs happy-dom globals; teardown disposes + emits `.perrr/dual-report.json` or `.perrr/miss-log.json` depending on mode.
+- Fixture runner config at `packages/perrr/vitest.acceptance.config.ts`:
+  - `environment: "perrr"`, path aliases, include patterns.
+- Fixture-aware deps resolved to current latest (React 19, RTL 16, user-event 14, radix 1.1, motion 12, lucide 0.469).
 
 ## Risks
 - **React 19 internals** poke at DOM in ways not exercised by the static test reader; trust the M2a miss-log, not static enumeration.
@@ -135,16 +133,20 @@ last-reviewed: 2026-04-28
 - **motion/react** springs use `requestAnimationFrame`; at M2 `rAF` maps to `queueMicrotask` (synchronous resolution), same as jsdom — matches what the fixture currently expects (test file asserts end states, not frame cadence).
 - **userEvent.setup** runs once in the bench file but M2 only needs `.test.tsx` green; user-event internals may still require richer event simulation than bench file alone.
 
-## Tests
-- Rust unit tests in `crates/perrr-dom/tests/*.rs` for tree invariants (proptest).
-- Rust integration test `crates/perrr-dom/tests/event_dispatch.rs`: capture/target/bubble order on a fixed tree.
-- `packages/perrr-dom-shim/test/facade.test.ts`: `instanceof HTMLElement`, `classList.add/remove`, `dispatchEvent` round-trip.
-- Primary acceptance: `fixtures/acceptance/components/accordion.test.tsx` via `pnpm -F perrr test:acceptance`.
+## Tests (as implemented)
+- Rust: `crates/perrr-dom/tests/basic.rs` (19 cases), `tree_invariants.rs` (3 proptest/fixed), `selectors.rs` (11 cases), `attr_case.rs` (5 cases), `stale_ids.rs` (4 cases). Total: 42 Rust tests.
+- JS: `packages/perrr/test/smoke.test.ts` (1), `dom.test.ts` (14, napi roundtrip + selectors), `dual-sanity.test.ts` (9 cases including strict-mode variant + H1d/H4a/H4b/H8 self-tests; 2 skip in strict mode), `selector-fuzz.test.ts` (2 cases exercising ~500 comparisons).
+- Rust event_dispatch integration test: NOT yet written (deferred to event-system milestone).
+- `packages/perrr-dom-shim/test/facade.test.ts`: NOT written at M2 (facade-native swap is M2c scope).
+- Primary acceptance: `fixtures/acceptance/components/accordion.test.tsx` via `pnpm -F perrr test:acceptance` (add `PERRR_DUAL_STRICT=1` for rigorous per-op equivalence verification).
 
 ## Open
-- Whether `perrr-dom` should depend on `obscura-dom` as a git dep or fork-copy the tree + tree_sink. Lean: fork-copy at M2 start, drop git coupling; record provenance in `perrr-dom/spec.md`.
-- Whether event serialization uses JSON at the boundary or a custom bincode variant. Lean: JSON at M2 (simplicity); optimize in a later perf pass if profiled hot.
-- Exact React 19 / RTL / radix / motion versions — pinned at M2a start to current latest.
+- ~~perrr-dom obscura-dom dependency~~: **decided — greenfield, no fork.** (Changed during 4d.i; see `perrr-dom/spec.md` Changelog.)
+- Event serialization mechanism at N-API boundary — deferred to event-system implementation (not part of M2's accepted scope anymore).
+- Exact React/RTL/radix/motion versions — pinned at round 4a per project policy.
+- **M2c swap.** When to actually cut happy-dom. Dual harness establishes the safety net; swap is the next round of serious work.
+- **Selector matcher coverage for non-accordion fixtures.** H2 refined but not broadly fuzz-tested.
+- **Event dispatch native implementation.** H10. Blocks complete M2 done-when.
 
 ## Changelog
 - 2026-04-28: initial.
@@ -159,3 +161,7 @@ last-reviewed: 2026-04-28
   - **5,637 selector queries per-call verified, 0 divergences**
   - **6 detector self-tests proving both paths fire** on injected divergence (native-only attr mutation, HD-only innerHTML set, native-only selector-affecting flip).
   - Totals: **9,834 equivalence assertions, zero deltas** → perrr-dom tree + selector semantics empirically equivalent to happy-dom for the accordion fixture.
+- 2026-04-28: 4e.iii adversarial tracker round. Added 14 unhooked-path counters. Found 158 unmirrored `Element.textContent` setter calls (H1d). Added `patchTextContentSetter`. Post-fix: 4,346 mutations checked, 0 divergences. Added `missedMirrorCount`, `getDualStats`.
+- 2026-04-28: 4e.iv selector fuzz corpus (~500 paired comparisons). Found HD bug on `button ~ a` (duplicate match). Refined H2: perrr-dom spec-correct for this selector.
+- 2026-04-28: 4e.v HTML attribute case-sensitivity bug in perrr-dom (H8). Explicit dual-harness test caught `Data-State` stored verbatim instead of lowercased. Fix in `perrr-dom::Tree`; 5-test `attr_case.rs` covers it. Post-fix strict mode: 4,351 mutations, 0 divergences.
+- 2026-04-28: 4e.vi NodeId stale-reuse behavior guarded with 4 Rust tests (`stale_ids.rs`). No bug; footgun documented; generation-counter upgrade path noted.

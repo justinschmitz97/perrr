@@ -1,7 +1,7 @@
 ---
 title: perrr-dom
 kind: crate
-status: draft
+status: implemented
 related:
   - specs/overview/00-tdd.md
   - specs/overview/03-dom-api-coverage.md
@@ -9,9 +9,11 @@ related:
   - specs/crates/perrr-node/spec.md
   - specs/packages/perrr-dom-shim/spec.md
 tests:
+  - crates/perrr-dom/tests/basic.rs
   - crates/perrr-dom/tests/tree_invariants.rs
-  - crates/perrr-dom/tests/event_dispatch.rs
-  - crates/perrr-dom/tests/queries.rs
+  - crates/perrr-dom/tests/selectors.rs
+  - crates/perrr-dom/tests/attr_case.rs
+  - crates/perrr-dom/tests/stale_ids.rs
 last-reviewed: 2026-04-28
 ---
 
@@ -23,16 +25,21 @@ last-reviewed: 2026-04-28
 ## Contract
 ### MUST
 - Expose a `Tree` type owning `Document`, `Element`, `Text`, `Comment`, `DocumentFragment` nodes.
-- `NodeId = u32`; stable for the node's lifetime within a Tree; reused only after `free_node`.
-- Mutation ops: `create_element`, `create_text_node`, `create_comment`, `create_document_fragment`, `append_child`, `insert_before`, `remove_child`, `replace_child`, `clone_node`, `free_node`.
-- Attribute ops: `get_attribute`, `set_attribute`, `remove_attribute`, `has_attribute`, `attribute_names(NodeId) -> Vec<String>`.
-- Text: `text_content`, `set_text_content`, `node_value`, `set_node_value`, `data`, `set_data`.
-- Queries: `query_selector(root, selector)`, `query_selector_all(root, selector)`, `get_element_by_id(tree, id)`, `get_elements_by_tag_name(root, tag)`.
-- Event ops: `add_event_listener(node, type, listener_id, options)`, `remove_event_listener(node, type, listener_id)`, `dispatch_event(target, event) -> bool`.
-- Focus tracking: `active_element(Tree) -> Option<NodeId>`, `focus(NodeId)`, `blur(NodeId)`.
-- Bulk reset: `reset_tree(Tree)` re-initializes a Tree to a fresh `<html><head></head><body></body></html>` in O(1) on the hot path (reallocates slotmap).
-- Deterministic iteration order: `children(NodeId)` returns children in insertion order.
-- Return `Result<T, DomError>` for every op that can fail (detached nodes, invalid selector, circular parent).
+- `NodeId = u32`; 1-based slot index into `Vec<Option<Node>>`; `0` reserved as `NODE_ID_INVALID`.
+- Stable for the node's lifetime within a Tree; slot reused after `free_node` (no generation counter at v0.1; behavior documented in `tests/stale_ids.rs`).
+- Node creation: `create_element`, `create_element_ns`, `create_text_node`, `create_comment`, `create_document_fragment`.
+- Attribute ops: `get_attribute`, `set_attribute`, `remove_attribute`, `has_attribute`, `attribute_names`, `id_attr`.
+  - HTML-namespace elements lowercase attribute names on set + lookup (HTML-spec compliance; enforced via `tests/attr_case.rs`).
+  - SVG (non-HTML) namespace preserves case.
+- Metadata: `node_type`, `node_kind`, `local_name`, `tag_name` (upper-cased for HTML elements), `namespace_uri`, `node_name`.
+- Tree walks: `parent_node`, `parent_element`, `children`, `first_child`, `last_child`, `next_sibling`, `previous_sibling`, `contains`, `root_node`, `owner_document`.
+- Tree mutation: `append_child`, `insert_before`, `remove_child`, `free_node` (recursive).
+- Text: `text_content` (recursive concatenation), `set_text_content` (replaces children), `node_data`, `set_node_data`.
+- Selector queries (hand-rolled subset in `selector` module): `matches`, `query_selector`, `query_selector_all`, `closest`. Parse errors surfaced as `SelectorParseError`.
+- Focus tracking: `active_element`, `focus`, `blur`.
+- Listener counter: `incr_listener`, `decr_listener`, `listener_count`, `total_listener_count` (drives M8 metric).
+- Deterministic iteration order: `children(id)` returns children in insertion order.
+- Return `Result<T, DomError>` for every fallible op (invalid node, cycle, not-a-child, reference not in parent, wrong kind).
 
 ### MUST NOT
 - Depend on any `perrr-*` crate other than (future) `perrr-style` when style resolution hooks land (M3); at M2, zero `perrr-*` deps.
@@ -41,44 +48,54 @@ last-reviewed: 2026-04-28
 - Return layout-dependent values (`getBoundingClientRect`, `offsetWidth`…). At M2 those stubs live in `perrr-dom-shim`; real values arrive in M4.
 
 ### Invariants
-- `parent.children` and `child.parent` always consistent after every op.
-- `free_node` also frees descendants (recursive).
-- `active_element == Some(n)` only if `n` is reachable from `document` via `parent` chain.
-- Every `add_event_listener` increments an internal listener counter on `Tree`; `remove_event_listener` and `free_node` decrement (drives M8 metric).
-- `dispatch_event` visits capture → target → bubble in order; `stopPropagation` and `stopImmediatePropagation` honored.
+- `parent.children` and `child.parent` always consistent after every op (enforced by `tests/tree_invariants.rs`).
+- `free_node` also frees descendants (recursive; enforced by proptest).
+- `free_node` on the current `active_element` clears it (documented + tested).
+- HTML attribute names stored lowercase; SVG names stored as given.
+- NodeKind discriminants lock to DOM-spec values (Element=1, Text=3, Comment=8, Document=9, DocumentFragment=11). Enforced by `tests/tree_invariants.rs → nodekind_covers_all_spec_values`.
+- Mutations on freed/invalid NodeIds return `Err(DomError::InvalidNode)`, never panic or corrupt state (`tests/stale_ids.rs`).
+- Reads on freed/invalid NodeIds return `None` / `NODE_ID_INVALID`, never panic.
 
 ## Non-goals (v0.1)
-- Shadow DOM beyond what RTL queries expect (empty shadow roots).
-- `MutationObserver` as a real spec implementation (stub at M2; real in a later milestone if fixtures require).
+- Event dispatch semantics (capture / target / bubble). M2 ships the listener counter only; full dispatch deferred to the event-system milestone.
+- `MutationObserver` as a real spec implementation.
+- Shadow DOM beyond what RTL queries expect.
 - `Range`, `Selection` (stubs in facade; not modelled in `perrr-dom`).
-- HTML parser for streaming (parse via `html5ever` when needed; not a runtime entry point).
+- HTML parser for streaming (parse via `html5ever` when needed; not a runtime entry point at v0.1).
+- `cloneNode`, `replace_child` (unused by accordion.test.tsx; add when a fixture demands).
+- Selector features beyond the supported subset (see `src/selector.rs` module doc): `:nth-*`, `:first-child`, `:hover/focus`, `:has/is/where`, escaped identifiers, Unicode selectors. Parse raises `ParseError::Unsupported`.
 
 ## Design
-- **Storage:** `Tree { nodes: SlotMap<NodeId, Node>, document: NodeId, active: Option<NodeId>, listeners: u32 }` using `slotmap::SlotMap` for stable keys.
-- **Node kinds:** `enum NodeKind { Document, Element { tag, namespace, attrs, classes, id }, Text(String), Comment(String), DocumentFragment }`.
+- **Storage:** `Tree { nodes: Vec<Option<Node>>, free_list: Vec<NodeId>, document: NodeId, active_element: NodeId }`. Index 0 reserved for `NODE_ID_INVALID`. Reuse-after-free: `free_list.pop()` recycles slots. No generation counter (footgun documented in `tests/stale_ids.rs`; upgrade path: `NodeId = (gen<<32)|slot` if a failing fixture demands it).
+- **Node kinds:** unit enum `NodeKind` (Element, Text, Comment, Document, DocumentFragment) + `#[repr(u8)]` discriminants matching DOM `nodeType`. Associated data lives on `Node` (parent, children, local_name, namespace_uri, attributes, text, listener_count).
 - **Children:** `Vec<NodeId>` on each node. Ordered. No cache, no doubly-linked list.
-- **Attributes:** small `Vec<(String, String)>` — DOM typically has < 10 attrs; hash map not worth the overhead.
-- **Selector matching:** reuse the `selectors` crate + `cssparser` (already in obscura-dom). Visitor pattern over the tree.
-- **Events:** listeners stored per-node as `Vec<Listener>`; dispatch walks the ancestor chain once to capture targets, then fires in canonical order.
-- **Provenance:** initial implementation forks `obscura-dom` (html5ever tree + selector matching). Tracked in `specs/decisions/0003-fork-obscura-dom.md` (TBD).
+- **Attributes:** small `Vec<Attr { name, value }>` — DOM typically has < 10 attrs; hash map not worth the overhead. HTML names lowercased on set + lookup.
+- **Selector matching:** hand-rolled in `src/selector.rs` (parser + matcher). Not using the `selectors` crate — subset targeted at accordion fixture + validated against happy-dom via differential fuzz.
+- **Events:** only the listener counter is implemented at v0.1. Full capture/target/bubble dispatch deferred to a later milestone; the M8 metric relies only on the counter.
+- **Provenance:** greenfield implementation — does NOT fork obscura-dom. Earlier spec drafts mentioned a fork; decision changed during 4d.i when the Tree API could be written cleaner from scratch than adapted.
 
 ## N-API surface (exposed via `perrr-node`)
-- Flat, handle-based. Each fn: `fn <op>(env: &Env, <NodeId | DocumentId | primitives>) -> Result<JsValue, Error>`.
-- No opaque Rust types cross the boundary; all parameters and returns are `u32`, `String`, `bool`, or `#[napi(object)]` DTOs.
-- Listener callbacks: listener registration returns a `listener_id: u32`; JS side owns a `Map<listener_id, fn>` and is called from Rust via a pre-registered env callback.
+- See `specs/crates/perrr-node/spec.md` §Exported surface for the authoritative list of JS-visible methods on `PerrrDom`.
+- All values crossing the boundary are `u32` (NodeId), `String`, `bool`, `Option<T>`, `Vec<u32>`, or `#[napi(object)]` DTOs.
+- Future event dispatch will require a JS-callable handle: listener registration returns `listener_id: u32`, JS owns `Map<listener_id, fn>`, Rust invokes via napi `ThreadsafeFunction` or sync env callback. Design open; benchmark at implementation time.
 
 ## Tests
-- `tests/basic.rs` — 19 unit tests for tree, attributes, siblings, text, focus, listener counter.
-- `tests/tree_invariants.rs` — 3 proptest cases: random mutation sequences preserve parent/child consistency; `free_node` frees all descendants.
-- `tests/selectors.rs` — 11 unit tests: `*`, type, class, id, attribute operators, `:not`, combinators (descendant / child / adjacent / sibling), selector list, `querySelector`, `querySelectorAll`, `closest`, unsupported-feature rejection.
-- `tests/event_dispatch.rs` — TBD (M2 event system, next round).
-- Indirect: `fixtures/acceptance/components/accordion.test.tsx` exercises end-to-end via happy-dom backend pending native facade swap.
+- `tests/basic.rs` — 19 unit tests for tree shape, attributes, siblings, text, focus, listener counter, tree-mutation errors.
+- `tests/tree_invariants.rs` — 3 proptest / fixed cases: random mutation sequences preserve parent/child consistency; `free_node` frees all descendants; NodeKind discriminants lock to spec.
+- `tests/selectors.rs` — 11 unit tests: `*`, type, class, id, attribute operators (`=`, `~=`, `^=`, `$=`, `*=`), `:not`, combinators (descendant / child / adjacent / sibling), selector list, `query_selector`, `query_selector_all`, `closest`, unsupported-feature rejection.
+- `tests/attr_case.rs` — 5 unit tests: HTML attr names lowercased on set; `has`/`remove`/`get_attribute` case-insensitive on HTML; SVG preserves case; values not lowercased.
+- `tests/stale_ids.rs` — 4 unit tests: stale reads → None; slot reuse footgun (documented, not fixed); out-of-range reads never panic; mutations on stale return Err.
+- Indirect: `fixtures/acceptance/components/accordion.test.tsx` exercises end-to-end via happy-dom backend + dual harness (4,351 tree mutations + 5,637 selector queries per-op verified equivalent across the two backends).
 
 ## Open
-- Namespace handling: full XML namespaces or HTML-only for v0.1. Lean: HTML-only; namespaces map to fixed strings. Revisit if SVG fixtures appear.
-- Listener-callback boundary cost: `ThreadsafeFunction` vs `Env`-sync call. Benchmark at M2c; default to sync.
+- Event dispatch (capture / target / bubble, `preventDefault`, `stopPropagation`) — not implemented at M2. Design TBD; possibly a JS-driven walk using Rust tree-ancestor helpers, avoiding per-event napi callbacks.
+- Generation counter on NodeId slots — not added. Wait for a failing fixture to justify the overhead (~5% memory).
+- Listener-callback boundary mechanism — `ThreadsafeFunction` vs `Env`-sync call. Benchmark at event-system implementation; default to sync.
+- Selector corpus extensions — `[a|=v]` boundary semantics, case-insensitive flag `i`, escaped identifiers; not yet fuzz-tested.
 
 ## Changelog
-- 2026-04-28: initial draft (M2 planning).
-- 2026-04-28: 4d.i shipped tree + Tier 1+2 ops (22 tests green).
+- 2026-04-28: initial draft (M2 planning). Status: draft (design written before implementation; some items later revised — see 4d.i).
+- 2026-04-28: 4d.i shipped tree + Tier 1+2 ops (22 tests green). Greenfield implementation; earlier draft's "fork obscura-dom" direction abandoned as unnecessary.
 - 2026-04-28: 4e.i shipped hand-rolled CSS selector subset (parse + matches + querySelector{,All} + closest); 11 more tests. Not using `selectors` crate — targeted at accordion fixture scope, trades spec completeness for implementation simplicity.
+- 2026-04-28: 4e.v — **bug fix: HTML attribute name case-sensitivity.** HTML elements now lowercase names on set + lookup (spec-compliant); SVG preserves case. Bug caught by dual harness H8 test. Rust tests added in `tests/attr_case.rs`.
+- 2026-04-28: 4e.vi — stale NodeId behavior documented via `tests/stale_ids.rs`. No bug; footgun made explicit. Generation counter upgrade path noted.

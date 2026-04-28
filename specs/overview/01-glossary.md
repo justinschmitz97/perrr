@@ -25,6 +25,19 @@ last-reviewed: 2026-04-27
 - **reconciliation-bound** — benchmark whose runtime is dominated by React reconciliation (mount, rerender, unmount).
 - **animation-bound** — benchmark whose runtime depends on rAF cadence + spring physics.
 - **fail-loud** — unsupported input throws a typed error with location; never silently mis-renders.
+- **HD** — abbreviation for happy-dom, used in the dual harness as the reference implementation.
+- **bimap** — paired `WeakMap<HDNode, NodeId>` + `Map<NodeId, HDNode>` owned by the dual harness; enables translation between happy-dom node references and perrr-dom NodeIds.
+- **dual harness** — `perrr-dom-shim/dual`. Mirrors HD mutations into perrr-dom and compares serialized tree shapes + selector-query results. Primary measurement tool of M2.
+- **dual mode** — env var `PERRR_DUAL=1`; verify-on-teardown only.
+- **strict dual mode** — env var `PERRR_DUAL_STRICT=1`; verify-after-every-hooked-op.
+- **harvest mode** — env var `PERRR_HARVEST=1`; wraps prototype methods with call counters to measure the DOM-API surface a fixture exercises.
+- **mirror-throw** — divergence class: perrr-dom raised an error where HD succeeded.
+- **read-divergence** — divergence class: HD and perrr-dom produced different results for the same query.
+- **read-translation-miss** — divergence class: HD returned a node not present in the bimap.
+- **tracker** — a prototype wrapper that counts invocations of an UNHOOKED mutation path; used to discover what a fixture actually exercises before committing to mirror.
+- **missed-mirror** — bimap-lookup miss in a hooked mutation path. Counted separately.
+- **tier (coverage)** — DOM APIs grouped by observed call count per run in `specs/overview/03-dom-api-coverage.md`: Tier 1 >1k, Tier 2 100-1k, Tier 3 10-100, Tier 4 <10.
 
 ## Changelog
 - 2026-04-27: initial.
+- 2026-04-28: added harness-era terms (HD, bimap, dual harness, dual/strict/harvest modes, divergence classes, tracker, missed-mirror, tier).
