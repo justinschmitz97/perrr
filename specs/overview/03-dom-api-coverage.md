@@ -1,7 +1,7 @@
 ---
 title: dom api coverage matrix
 kind: overview
-status: draft
+status: approved
 related:
   - specs/milestones/m2-dom-shim.md
   - specs/crates/perrr-dom/spec.md
@@ -147,12 +147,124 @@ _Not authoritative. Will be superseded by M2a harvest._
 | `Element.namespaceURI` | stubbed (M2) | `"http://www.w3.org/1999/xhtml"` |
 | `Range`, `Selection` | stubbed (M2) | motion/RTL may not touch in this fixture |
 
-## Dynamic harvest (M2a)
-_Populated during M2a run. Format below._
+## Dynamic harvest (2026-04-28)
+- Method: `PERRR_HARVEST=1 pnpm -F perrr test:acceptance` with happy-dom backend wrapped by `perrr-dom-shim/src/harvest.js`.
+- Run scope: `fixtures/acceptance/components/accordion.test.tsx` (39/39 green).
+- Unique APIs: **72**. Total calls: **121,833**.
+- Output artifact: `packages/perrr/.perrr/miss-log.json` (gitignored).
+- Harvest limitations: method calls on `Document.prototype` (e.g. `createElement`) did not show up because happy-dom exposes them via own-property prototypes outside our PROTOTYPE_KEYS walker. Not a gap for M2c — we know those are called.
 
-| API | status | caller | required-for-green | plan |
-|---|---|---|---|---|
-| _(empty until M2a runs)_ | | | | |
+### Tier 1 — hot path (>1k calls/run)
+Implement natively with per-call overhead < 500 ns target.
+
+| API | calls | backend plan |
+|---|---|---|
+| `Node.get nodeType` | 19,276 | `u8` constant in `NodeKind`, no N-API call; cache on JS facade |
+| `Element.getAttribute` | 13,110 | native, linear scan over small attr vec |
+| `Event.get eventPhase` | 12,850 | JS-side Event instance field |
+| `Event.get type` | 11,623 | JS-side |
+| `Element.get localName` | 11,574 | `&str` from native; cache in facade |
+| `Node.get parentNode` | 6,253 | native single-field read |
+| `Node.getRootNode` | 5,684 | native walk to ancestor root |
+| `Element.matches` | 5,535 | native `selectors` crate match |
+| `Element.get shadowRoot` | 5,344 | JS-side: always `null` |
+| `Element.setAttribute` | 4,197 | native attr vec mutation |
+| `Node.get ownerDocument` | 3,793 | JS-side: singleton `Document` |
+| `HTMLElement.get style` | 2,970 | JS-side `CSSStyleDeclaration` proxy; writes buffered in facade, flushed to native on read-back |
+| `Element.get tagName` | 2,455 | native `&str` (upper-case) |
+| `Element.get namespaceURI` | 2,354 | stubbed constant: `"http://www.w3.org/1999/xhtml"` |
+| `Element.get nodeName` | 1,784 | same as tagName for elements |
+| `Node.get parentElement` | 1,730 | native (parentNode if element) |
+| `Element.getAttributeNode` | 1,404 | native; returns small `Attr` DTO |
+| `Element.hasAttribute` | 1,043 | native |
+| `Event.get target` | 1,006 | JS-side |
+
+### Tier 2 — warm (100–1000 calls/run)
+
+| API | calls | backend plan |
+|---|---|---|
+| `HTMLButtonElement.dispatchEvent` | 963 | native dispatch; JS facade marshals Event to NodeId + fires |
+| `Node.appendChild` | 715 | native op |
+| `Node.get childNodes` | 510 | native: returns NodeId[] snapshot |
+| `Event.composedPath` | 482 | JS-side (no Shadow DOM) |
+| `HTMLElement.get hidden` | 454 | JS-side attr reflection |
+| `HTMLButtonElement.get type` | 350 | JS-side attr reflection (default "submit") |
+| `Event.get defaultPrevented` | 330 | JS-side |
+| `HTMLElement.get onfocusin` | 228 | JS-side: null default |
+| `Element.get id` | 223 | native attr |
+| `HTMLElement.get contentEditable` | 221 | JS-side attr reflection (default "inherit") |
+| `HTMLElement.set onclick` | 172 | JS-side; registers via `addEventListener("click", fn)` |
+| `Element.set textContent` | 158 | native: remove children, insert text node |
+| `HTMLElement.get onclick` | 152 | JS-side |
+| `HTMLElement.get onpointerdown` | 137 | JS-side |
+| `HTMLElement.get onpointerup` | 137 | JS-side |
+| `HTMLElement.get onmousedown` | 130 | JS-side |
+| `HTMLElement.get onmouseup` | 130 | JS-side |
+| `Event.get cancelable` | 128 | JS-side |
+| `HTMLButtonElement.get labels` | 123 | stub: empty NodeList at M2 |
+| `HTMLElement.get onpointerover` | 116 | JS-side |
+| `HTMLElement.get onmouseover` | 116 | JS-side |
+| `HTMLElement.get onpointermove` | 116 | JS-side |
+| `HTMLElement.get onmousemove` | 116 | JS-side |
+| `Event.get bubbles` | 110 | JS-side |
+| `Event.get timeStamp` | 110 | JS-side (`performance.now()` at construction; virtual at M5) |
+| `Node.get firstChild` | 101 | native single-field read |
+
+### Tier 3 — cool (10–100 calls/run)
+
+| API | calls | backend plan |
+|---|---|---|
+| `Element.getBoundingClientRect` | 99 | stubbed: `{0,0,0,0,...}` at M2; real in M4 |
+| `Element.removeAttribute` | 95 | native |
+| `Node.removeChild` | 89 | native |
+| `Node.get previousSibling` | 89 | native |
+| `Node.get nextSibling` | 89 | native |
+| `HTMLButtonElement.get disabled` | 83 | JS-side attr reflection (bool) |
+| `Element.querySelectorAll` | 79 | native `selectors` crate |
+| `HTMLElement.get onpointerenter` | 78 | JS-side |
+| `HTMLElement.get onmouseenter` | 78 | JS-side |
+| `HTMLElement.get onkeydown` | 77 | JS-side |
+| `HTMLElement.get onkeyup` | 77 | JS-side |
+| `HTMLElement.get onfocusout` | 63 | JS-side |
+| `HTMLElement.get onpointerout` | 44 | JS-side |
+| `HTMLElement.get onmouseout` | 44 | JS-side |
+| `HTMLElement.focus` | 33 | native (updates `active_element`) |
+| `HTMLElement.get onfocus` | 33 | JS-side |
+| `Element.get role` | 33 | JS-side attr reflection |
+| `Node.contains` | 24 | native ancestor walk |
+| `Element.closest` | 23 | native |
+| `Event.preventDefault` | 18 | JS-side |
+| `Element.get scrollTop` | 14 | stubbed `0` at M2 |
+| `Element.set scrollTop` | 14 | stubbed noop at M2 |
+| `Element.set scrollLeft` | 14 | stubbed noop at M2 |
+
+### Tier 4 — cold (<10 calls/run)
+
+| API | calls | backend plan |
+|---|---|---|
+| `HTMLElement.blur` | 9 | native (clears `active_element`) |
+| `HTMLElement.get onblur` | 9 | JS-side |
+| `HTMLElement.get onpointerleave` | 6 | JS-side |
+| `HTMLElement.get onmouseleave` | 6 | JS-side |
+
+### Gap list — called but not yet instrumented
+_(known-called by observation; harvest missed them due to PROTOTYPE_KEYS walker not reaching these prototypes)_
+
+- `Document.createElement`, `Document.createElementNS`, `Document.createTextNode`, `Document.createDocumentFragment`, `Document.createComment`, `Document.createEvent`
+- `Document.querySelector`, `Document.querySelectorAll`, `Document.getElementById`
+- `Document.body`, `Document.documentElement`, `Document.head`
+- `Event.stopPropagation`, `Event.stopImmediatePropagation`, `Event.initEvent`
+- `EventTarget.addEventListener`, `EventTarget.removeEventListener` (on non-HTMLElement targets)
+
+All of Tier 1+2 reachability implies these ARE called; M2c implementation plan covers them explicitly.
+
+## Plan for M2c ordering
+1. Tier 1 native ops (19 APIs) — establishes the fast path.
+2. Tier 2 reads + top mutations (~25 APIs).
+3. Gap-list Document-level APIs.
+4. Tier 3 events + focus + queries (~23 APIs).
+5. Tier 4 edge cases (4 APIs).
 
 ## Changelog
-- 2026-04-28: initial static pre-pass (pre-M2a). Dynamic harvest table empty.
+- 2026-04-28: initial static pre-pass (pre-M2a).
+- 2026-04-28: dynamic harvest from 4b/4c landed. 72 unique APIs, 121,833 calls, sorted into 4 tiers. Status moved from draft → approved. Pre-M2a static table now superseded by tiers below.

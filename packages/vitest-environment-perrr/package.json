@@ -10,9 +10,11 @@
     ".": "./index.js"
   },
   "files": ["index.js"],
+  "dependencies": {
+    "perrr-dom-shim": "workspace:*"
+  },
   "peerDependencies": {
     "perrr": "workspace:*",
-    "perrr-dom-shim": "workspace:*",
     "vitest": ">=4"
   },
   "scripts": {

@@ -6,6 +6,9 @@ node_modules/
 .vscode/
 .idea/
 
+# perrr runtime artifacts (harvest logs, bench output)
+.perrr/
+
 # napi-rs generated (packages/perrr)
 packages/perrr/index.js
 packages/perrr/index.d.ts

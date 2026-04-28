@@ -150,3 +150,4 @@ last-reviewed: 2026-04-28
 - 2026-04-28: initial.
 - 2026-04-28: added vitest-environment-perrr rename (ADR 0003), dedicated fixture vitest config with path aliases, and list of required npm devDeps.
 - 2026-04-28: M2a red stage validated. Env stub + `.npmrc` shamefully-hoist + vitest.acceptance.config.ts landed; `pnpm -F perrr test:acceptance` produces the expected 39/39 failures with `ReferenceError: document is not defined`. Case count corrected 36 → 39 across specs (actual vitest run count).
+- 2026-04-28: M2b harvest stage. Approach adjusted: instead of fail-loud logging Proxy, install happy-dom as a temporary backend via `@happy-dom/global-registrator`. All 39/39 tests now GREEN end-to-end — validates the env pipeline. `PERRR_HARVEST=1` mode wraps DOM prototypes with call counters; harvest produces `packages/perrr/.perrr/miss-log.json`. 72 unique APIs, 121,833 calls, sorted into 4 tiers in `specs/overview/03-dom-api-coverage.md`. M2c scope now data-driven.
