@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 napi = { workspace = true }
 napi-derive = { workspace = true }
+perrr-dom = { path = "../perrr-dom" }
 
 [build-dependencies]
 napi-build = { workspace = true }

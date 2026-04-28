@@ -410,6 +410,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "perrr-dom",
 ]
 
 [[package]]
