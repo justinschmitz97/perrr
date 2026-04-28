@@ -543,11 +543,7 @@ impl Tree {
 
     /// Register a listener. DOM spec: (event_type, listener_id, capture)
     /// is a no-op if already registered.
-    pub fn add_event_listener(
-        &mut self,
-        id: NodeId,
-        listener: Listener,
-    ) -> Result<(), DomError> {
+    pub fn add_event_listener(&mut self, id: NodeId, listener: Listener) -> Result<(), DomError> {
         let node = self.node_mut(id).ok_or(DomError::InvalidNode(id))?;
         let already = node.listeners.iter().any(|l| {
             l.event_type == listener.event_type
