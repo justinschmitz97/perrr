@@ -30,6 +30,19 @@ function getGlobal() {
       strict: false,
       opCounter: 0,
       queryCounter: 0,
+      /**
+       * Count mirror-skip events caused by bimap lookup misses. Spec:
+       * specs/overview/05-hypotheses.md §H4b. Non-zero means we have
+       * happy-dom nodes the harness never registered.
+       */
+      missedMirrorCount: 0,
+      /**
+       * Per-API counts for UNHOOKED mutation paths (H1 trackers).
+       * We do NOT mirror these; the count alone tells us whether the
+       * hypothesis "nothing critical is unhooked" holds for the
+       * current fixture.
+       */
+      trackerCounts: {},
     };
   }
   return g[GLOBAL_KEY];
@@ -165,6 +178,9 @@ export function installDualBackend(options = {}) {
   patchTreeOp("appendChild", function (child) {
     const pid = idOf.get(this);
     const cid = idOf.get(child);
+    if (pid == null || cid == null) {
+      getGlobal().missedMirrorCount += 1;
+    }
     if (pid != null && cid != null) {
       try {
         native.appendChild(pid, cid);
@@ -183,6 +199,9 @@ export function installDualBackend(options = {}) {
     const pid = idOf.get(this);
     const cid = idOf.get(newChild);
     const rid = refChild == null ? 0 : idOf.get(refChild);
+    if (pid == null || cid == null) {
+      getGlobal().missedMirrorCount += 1;
+    }
     if (pid != null && cid != null) {
       try {
         native.insertBefore(pid, cid, rid ?? 0);
@@ -200,6 +219,9 @@ export function installDualBackend(options = {}) {
   patchTreeOp("removeChild", function (child) {
     const pid = idOf.get(this);
     const cid = idOf.get(child);
+    if (pid == null || cid == null) {
+      getGlobal().missedMirrorCount += 1;
+    }
     if (pid != null && cid != null) {
       try {
         native.removeChild(pid, cid);
@@ -237,6 +259,7 @@ export function installDualBackend(options = {}) {
 
   patchAttr("setAttribute", function (name, value) {
     const id = idOf.get(this);
+    if (id == null) getGlobal().missedMirrorCount += 1;
     if (id != null) {
       try {
         native.setAttribute(id, String(name), String(value));
@@ -300,6 +323,12 @@ export function installDualBackend(options = {}) {
 
   patchDataSetter();
 
+  // ----- Element.textContent setter — mirrored. See H1d.
+  patchTextContentSetter();
+
+  // ----- H1 trackers: count unhooked mutation paths.
+  installTrackers();
+
   // ----- Read-side: verify queries agree between backends.
   patchQuery("matches", function (selector) {
     const id = idOf.get(this);
@@ -318,6 +347,85 @@ export function installDualBackend(options = {}) {
   // Element mixin. Patch both prototypes if present and distinct.
   patchSelectorQuery("querySelector", false);
   patchSelectorQuery("querySelectorAll", true);
+}
+
+// --------------------------------------------------------------
+// H1 trackers — count unhooked mutation paths to test the claim that
+// happy-dom ↔ perrr-dom shape parity holds on the full surface, not
+// just the eight hooked mutations.
+// --------------------------------------------------------------
+
+function trackerIncr(name) {
+  const g = getGlobal();
+  g.trackerCounts[name] = (g.trackerCounts[name] ?? 0) + 1;
+}
+
+function trackerWrap(proto, key, label) {
+  if (!proto) return;
+  const descriptor = Object.getOwnPropertyDescriptor(proto, key);
+  if (!descriptor) return;
+  const patchId = `TRACKER:${label}`;
+  const patches = getGlobal().patches;
+  if (patches.has(patchId)) return;
+  patches.set(patchId, { proto, key, original: descriptor });
+  if (typeof descriptor.value === "function") {
+    Object.defineProperty(proto, key, {
+      configurable: true,
+      writable: true,
+      value: function (...args) {
+        trackerIncr(label);
+        return descriptor.value.apply(this, args);
+      },
+    });
+  } else if (descriptor.set) {
+    Object.defineProperty(proto, key, {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get: descriptor.get,
+      set: function (v) {
+        trackerIncr(label);
+        descriptor.set.call(this, v);
+      },
+    });
+  }
+}
+
+function installTrackers() {
+  const El = globalThis.Element?.prototype;
+  const Node = globalThis.Node?.prototype;
+  const HTMLInput = globalThis.HTMLInputElement?.prototype;
+  const DOMTokenList = globalThis.DOMTokenList?.prototype;
+
+  // Element-level mutating methods / setters we do NOT currently mirror.
+  trackerWrap(El, "innerHTML", "Element.set innerHTML");
+  trackerWrap(El, "outerHTML", "Element.set outerHTML");
+  // Element.textContent setter is *mirrored* (see patchTextContent) not
+  // just tracked — measurement showed 158 calls on accordion, and
+  // because textContent sets live inside detached subtrees, our shape
+  // check never saw the drift (H1d).
+  trackerWrap(El, "insertAdjacentHTML", "Element.insertAdjacentHTML");
+  trackerWrap(El, "insertAdjacentElement", "Element.insertAdjacentElement");
+  trackerWrap(El, "insertAdjacentText", "Element.insertAdjacentText");
+
+  // Node-level convenience mutations (ChildNode / ParentNode mixins).
+  trackerWrap(El, "remove", "Element.remove");
+  trackerWrap(El, "before", "Element.before");
+  trackerWrap(El, "after", "Element.after");
+  trackerWrap(El, "replaceWith", "Element.replaceWith");
+  trackerWrap(El, "append", "Element.append");
+  trackerWrap(El, "prepend", "Element.prepend");
+  trackerWrap(El, "replaceChildren", "Element.replaceChildren");
+  trackerWrap(Node, "normalize", "Node.normalize");
+
+  // classList / dataset access paths.
+  trackerWrap(DOMTokenList, "add", "classList.add");
+  trackerWrap(DOMTokenList, "remove", "classList.remove");
+  trackerWrap(DOMTokenList, "toggle", "classList.toggle");
+  trackerWrap(DOMTokenList, "replace", "classList.replace");
+
+  // Form controls.
+  trackerWrap(HTMLInput, "value", "HTMLInputElement.set value");
+  trackerWrap(HTMLInput, "checked", "HTMLInputElement.set checked");
 }
 
 function patchCreate(docInstance, method, nativeCall, idOf, nodeOf) {
@@ -535,6 +643,37 @@ function compareSelectorQueryResult(method, many, s, id, selector, hdResult) {
   }
 }
 
+function patchTextContentSetter() {
+  const El = globalThis.Element?.prototype;
+  if (!El) return;
+  const original = Object.getOwnPropertyDescriptor(El, "textContent");
+  if (!original || !original.set) return;
+  patch(El, "textContent", {
+    configurable: true,
+    enumerable: original.enumerable,
+    get: original.get,
+    set: function (value) {
+      original.set.call(this, value);
+      const s = getState();
+      const id = s?.idOf.get(this);
+      if (id == null) {
+        if (s) getGlobal().missedMirrorCount += 1;
+        return;
+      }
+      try {
+        s.native.setTextContent(id, value == null ? "" : String(value));
+      } catch (e) {
+        pushDivergence({
+          kind: "mirror-throw",
+          op: "set textContent",
+          error: String(e),
+        });
+      }
+      maybeVerifyAfterMutation("set textContent", [value]);
+    },
+  });
+}
+
 function patchDataSetter() {
   // Text + Comment share `.data` and `.nodeValue` on CharacterData.
   const CharacterData = globalThis.CharacterData?.prototype;
@@ -672,11 +811,29 @@ export function verifyDualShapes() {
     strict: g.strict,
     mutationsChecked: g.opCounter,
     queriesChecked: g.queryCounter ?? 0,
+    missedMirrorCount: g.missedMirrorCount ?? 0,
+    trackerCounts: { ...(g.trackerCounts ?? {}) },
   };
 }
 
 export function getDivergences() {
   return getGlobal().divergences.slice();
+}
+
+/**
+ * Return the current counters and tracker state WITHOUT throwing on
+ * divergence. Use when you want to observe drift instead of fail on it.
+ */
+export function getDualStats() {
+  const g = getGlobal();
+  return {
+    strict: g.strict,
+    mutationsChecked: g.opCounter,
+    queriesChecked: g.queryCounter ?? 0,
+    missedMirrorCount: g.missedMirrorCount ?? 0,
+    divergences: g.divergences.length,
+    trackerCounts: { ...(g.trackerCounts ?? {}) },
+  };
 }
 
 export function clearDivergences() {
@@ -693,6 +850,8 @@ export function disposeDualBackend() {
   g.strict = false;
   g.opCounter = 0;
   g.queryCounter = 0;
+  g.missedMirrorCount = 0;
+  g.trackerCounts = {};
 }
 
 export function nativeInstance() {

@@ -22,17 +22,14 @@ related:
 ## Hypotheses
 
 ### H1 — "perrr-dom tree mutation is equivalent to happy-dom for accordion.test.tsx"
-- **Evidence:** 4,197 strict-mode per-op shape diffs, zero divergences.
-- **Scope of evidence:** only the eight mutation paths we hook (appendChild, insertBefore, removeChild, replaceChild, setAttribute, removeAttribute, toggleAttribute, CharacterData.data/nodeValue setters).
-- **Counter-hypotheses:**
-  - **H1a:** React / RTL / radix / motion uses unhooked mutation paths (innerHTML, Element.textContent setter, classList.add/remove/toggle, dataset, insertAdjacentHTML, before/after/remove/replaceWith, normalize). If so, happy-dom's tree mutates but perrr-dom's does not. The 4,197 "matching" checks happen AFTER hooked mutations, so any unhooked mutation in between would surface at the next hooked one — UNLESS unhooked mutations only run at the end (just before cleanup()).
-  - **H1b:** `node.remove()` is unhooked. It calls parent.removeChild internally, which IS hooked on Node.prototype — so probably transitively covered. **Verify.**
-  - **H1c:** classList.add(x) internally calls setAttribute("class", …). If so, our setAttribute hook covers it. **Verify.**
-  - **H1d:** Element.textContent setter (distinct from CharacterData.nodeValue) replaces children. Unhooked. If called, we miss it.
-- **Test plan:**
-  - Add a "tracker" hook that ONLY counts calls (no mirror) for: Element.innerHTML setter, Element.textContent setter, classList.add/remove/toggle/replace, dataset Proxy get/set, insertAdjacentHTML, node.remove, before, after, replaceWith, normalize, HTMLInputElement.value setter.
-  - Run accordion.test.tsx. Dump counters.
-  - Any counter > 0 on an unhooked *mutating* API is a confidence gap. Either mirror it or prove it's transitive.
+- **Status: refined (partially confirmed, narrowed).**
+- **Evidence (post-iteration):** 4,346 strict-mode per-op shape diffs, zero divergences, plus explicit tracker counters for 14 previously-unhooked mutation paths showing **all zero for the accordion fixture**.
+- **Counter-hypotheses outcomes:**
+  - **H1a:** refuted for accordion. Tracker shows innerHTML / outerHTML / insertAdjacentHTML / insertAdjacentElement / insertAdjacentText / Element.remove / before / after / replaceWith / append / prepend / replaceChildren / Node.normalize / classList.add/remove/toggle/replace / HTMLInputElement.value/checked setters all have **count=0** on the accordion fixture. Claim narrowed: *for this fixture*, those paths are not exercised. Would re-open on different fixtures.
+  - **H1b:** not tested. `node.remove()` tracker = 0, so transitivity is moot for this fixture.
+  - **H1c:** not tested. `classList.*` tracker = 0.
+  - **H1d:** **confirmed as a real gap, then closed.** Tracker first showed 158 `Element.set textContent` calls unmirrored. Strict shape check missed the drift because textContent sets happened inside subtrees that were detached before the next hooked op ran on their ancestors (subtree-local drift invisible to root-level serialization). Fix: added `patchTextContentSetter` mirroring to `native.setTextContent`. Re-run: mutationsChecked jumped from 4,207 → 4,346 with **0 new divergences**, confirming perrr-dom's setTextContent matches happy-dom's semantics for those calls. Regression test: `dual-sanity.test.ts → "textContent mirror keeps trees in sync"`.
+- **Generalization warning:** zero counters in the trackers mean zero calls *on accordion.test.tsx*. Other fixtures (modals, forms, virtualized lists) WILL exercise some of these paths. When we widen fixture scope, rerun trackers first; mirror before cutting happy-dom.
 
 ### H2 — "perrr-dom selector matcher produces identical results to happy-dom for realistic queries"
 - **Evidence:** 5,637 matches/querySelector/closest calls, zero divergence.
@@ -55,16 +52,13 @@ related:
   - Consider adding a generation counter (u32 top-bits) to catch stale IDs; measure overhead; decide.
 
 ### H4 — "The dual harness's detector actually catches all classes of divergence"
-- **Evidence:** 6 self-tests firing (injected mutation divergence, injected selector divergence, both directions).
-- **Counter-hypotheses:**
-  - **H4a:** We only `pushDivergence("mirror-throw")` when perrr-dom throws while happy-dom succeeded. The reverse case (HD throws, perrr doesn't) is silent. If perrr-dom accepts invalid HTML / invalid selectors that HD rejects, we'd never notice.
-  - **H4b:** If the bimap fails to register an HD node (i.e. `idOf.get(hdNode)` returns undefined), we silently skip the mirror. Divergence is masked. There's no "missed-mirror" counter.
-  - **H4c:** `serializeNative` and `serializeHappyDom` might normalize identically even when trees differ semantically — e.g. if attribute order is sorted in both serializers, but internal iteration order in the actual DOM differs, we won't catch it. Child order IS verified via the serializer's preorder walk.
-  - **H4d:** Strict mode verifies AFTER every hooked mutation. It does not verify AFTER unhooked mutations. So unhooked-mutation divergence is only caught at the next hooked operation (if any) or at end-of-test.
-- **Test plan:**
-  - Self-test where HD throws (invalid innerHTML) but we silently succeed on our side. Verify this is flagged.
-  - Self-test where a NodeId is created on happy-dom but not registered in the bimap; verify we emit a "missed-mirror" log. Add a missed-mirror counter to stats.
-  - Self-test where child-order differs but serialized string accidentally matches (constructed maliciously) — reject if found possible; else close out.
+- **Status: partially confirmed.**
+- **Evidence:** 9 self-tests firing (baseline, mutation divergence (2 directions), query divergence, op counter advancement, query counter advancement, textContent mirror, bimap miss, HD-throws-mirror-stays-consistent).
+- **Counter-hypotheses outcomes:**
+  - **H4a:** confirmed. Sanity test (`H4a — HD-throws, mirror-didn't-run stays consistent`) exercises `setAttribute("", "x")`. Since our hook order is `original.apply(this, args)` → `mirror.apply(this, args)`, if the original throws, mirror never runs, and both sides stay consistent. Limitation: HD in practice accepts empty name (doesn't throw), so the test documents the pattern rather than exercising a thrown path. Open TODO: find an HD op that genuinely throws (invalid QName, maybe `setAttributeNS` with mismatched NS?) to exercise the thrown path for real.
+  - **H4b:** confirmed. Added `missedMirrorCount` counter (incremented in `appendChild` / `insertBefore` / `removeChild` / `replaceChild` / `setAttribute` / `removeAttribute` / `set textContent` paths when bimap lookup fails). Sanity test (`H4b — missedMirrorCount increments on bimap miss`) deliberately deletes a node from the bimap, calls `parent.appendChild(child)`, verifies the counter advanced. Loose mode observes the drift via the counter; strict mode additionally throws at the next verify (proven by `strict mode throws at the op that introduces divergence` test).
+  - **H4c:** **still open.** Serialization uses preorder walk with sorted attrs. This preserves child order. Attribute order differences cannot be observed since we sort — but also cannot silently hide semantic differences, because iteration order over attributes is not a DOM-spec-visible property. Believe safe; no regression test yet.
+  - **H4d:** confirmed. Strict only verifies after HOOKED ops. The textContent case (H1d) made this concrete: 158 unhooked calls, strict ran 4,197 verifications, none detected the drift. Mitigation: ensure all mutating paths are hooked before claiming equivalence.
 
 ### H5 — "`pnpm -F perrr test:acceptance` exercises everything accordion.test.tsx will exercise in production"
 - **Evidence:** All 39 cases pass under happy-dom today; RTL assertions find the right elements.
@@ -93,12 +87,23 @@ related:
   - Non-blocking. Document the limitation in `specs/overview/02-metrics.md` so readers don't over-interpret perrr numbers as "Chrome numbers."
 
 ## Action queue (sorted by risk reduction / cost)
-1. **H1 trackers** — cheap, high value. Add call counters for unhooked mutating APIs; run; decide what to mirror. Immediate next step.
-2. **H4 — missed-mirror counter.** Cheap. One line in the bimap-lookup path.
-3. **H6 — forced-throw drift test.** Cheap.
-4. **H2 selector edge cases.** Medium. Expand selectors.rs tests.
-5. **H3 stale-id test.** Medium. Rust fuzz test.
-6. **H4a — HD-throws-we-succeed.** Medium. Need a divergence-where-HD-errors sanity test.
+1. ~~**H1 trackers**~~ — done 2026-04-28. Found H1d (textContent unmirrored), fixed.
+2. ~~**H4 — missed-mirror counter.**~~ done 2026-04-28.
+3. ~~**H6 / H4a — forced-throw drift test.**~~ done 2026-04-28 (H4a sanity test).
+4. **H2 selector edge cases.** Expand selectors.rs tests with `:first-child`, `[a|=x]` boundary, case-insensitive flag, escaped identifiers. Open.
+5. **H3 stale-id test.** Rust test that exercises free + reuse + stale-id query. Open.
+6. **H8 (new) attribute case-sensitivity.** HD may normalize HTML attribute names (e.g. `Data-State` → `data-state`); perrr-dom stores as given. Tracker data showed zero mismatch for accordion (suggests both preserve case or both lowercase), but untested. Open.
+7. **H9 (new) activeElement tracking parity.** `document.activeElement` not hooked in dual harness; not differentially compared. Open.
+8. **H10 (new) event dispatch parity.** When native event dispatch lands, compare HD vs native dispatch order + preventDefault semantics. Open.
+
+## Numbers-at-a-glance (after round 4e.iii trackers + textContent mirror)
+- Strict mode on accordion.test.tsx:
+  - 4,346 tree-shape assertions, 0 divergences
+  - 5,637 selector-query assertions, 0 divergences
+  - 0 bimap misses (via live paths)
+  - 14 unhooked mutation-tracker APIs, all count=0 for this fixture
+- Self-test suite: 9 cases proving the detector fires in both modes + on both sides (injected HD divergence, injected native divergence, bimap miss, textContent parity).
 
 ## Changelog
-- 2026-04-28: initial.
+- 2026-04-28: initial (7 hypotheses).
+- 2026-04-28: round 4e.iii — H1 trackers discovered H1d (textContent unmirrored), fixed + regression-tested. H4a/H4b confirmed via sanity tests. Added new open hypotheses H8/H9/H10 based on adversarial review.

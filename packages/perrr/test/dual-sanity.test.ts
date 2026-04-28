@@ -13,6 +13,7 @@ import {
 
 const dualMode =
   process.env["PERRR_DUAL"] === "1" || process.env["PERRR_DUAL_STRICT"] === "1";
+const strictMode = process.env["PERRR_DUAL_STRICT"] === "1";
 
 describe.skipIf(!dualMode)("dual harness self-test", () => {
   it("baseline: trees match after creating + inserting an element", () => {
@@ -129,5 +130,100 @@ describe.skipIf(!dualMode)("dual harness self-test", () => {
     native!.setAttribute(id!, "data-state", "open");
     el.remove();
     clearDivergences();
+  });
+
+  it("textContent mirror keeps trees in sync (H1d regression guard)", () => {
+    const btn = document.createElement("button");
+    document.body.appendChild(btn);
+    btn.textContent = "Trigger 0";
+    expect(() => verifyDualShapes()).not.toThrow();
+    btn.textContent = "Trigger 1";
+    expect(() => verifyDualShapes()).not.toThrow();
+    btn.textContent = "";
+    expect(() => verifyDualShapes()).not.toThrow();
+    btn.remove();
+  });
+
+  // H4b / H4a deliberately inject unfixable divergence to validate the
+  // detector. In strict mode the injection throws immediately (which
+  // IS the proof, but makes the test un-runnable as a standalone unit).
+  // We use loose mode here; strict mode's catch behavior is proven by
+  // the "strict mode catches bimap miss at mutation time" test below.
+  it.skipIf(strictMode)("H4b — missedMirrorCount increments on bimap miss", async () => {
+    // @ts-expect-error
+    const { clearDivergences, getDualStats } = await import(
+      "perrr-dom-shim/dual"
+    );
+    clearDivergences();
+    const before = getDualStats();
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    // Construct a child node but delete its bimap entry to force a
+    // bimap miss on the subsequent hooked mutation.
+    const child = document.createElement("span");
+    // @ts-expect-error — accessing internal bimap for the self-test.
+    const dualState = (globalThis as any).__perrr_dual_state__?.state;
+    dualState.idOf.delete(child);
+    parent.appendChild(child);
+    const after = getDualStats();
+    expect(after.missedMirrorCount).toBeGreaterThan(before.missedMirrorCount);
+
+    // Clean up both sides back to parity so env-teardown doesn't fire.
+    // Remove child from HD manually (it's attached to parent); native
+    // already has no knowledge of it.
+    parent.removeChild(child);
+    parent.remove();
+  });
+
+  it.skipIf(strictMode)("H4a — HD-throws, mirror-didn't-run stays consistent", () => {
+    // happy-dom throws on setAttribute with an invalid name ("" is invalid).
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    let hdThrew = false;
+    try {
+      el.setAttribute("", "x");
+    } catch {
+      hdThrew = true;
+    }
+    // Either HD throws or accepts; whatever it does, native mirror
+    // path is guarded by `original.apply` running first, so if HD
+    // threw, the mirror never ran — and native is unchanged.
+    // Post-state must be equivalent.
+    expect(() => verifyDualShapes()).not.toThrow();
+    el.remove();
+    // Document the observation regardless of HD's spec conformance.
+    // (HD happens to accept "" without throwing at the time of writing.)
+    void hdThrew;
+  });
+
+  it.skipIf(!strictMode)("strict mode throws at the op that introduces divergence", async () => {
+    // @ts-expect-error
+    const { clearDivergences } = await import("perrr-dom-shim/dual");
+    clearDivergences();
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const child = document.createElement("span");
+    const dualState = (globalThis as any).__perrr_dual_state__?.state;
+    dualState.idOf.delete(child);
+
+    // In strict mode, appendChild verifies after mutation → throws.
+    expect(() => parent.appendChild(child)).toThrowError(
+      /STRICT divergence after op/,
+    );
+
+    // Restore parity by rebuilding bimap manually: remove span from HD,
+    // clear the (still-divergent) state so env teardown is clean. We
+    // can't easily reconcile via public APIs, so tear down the whole
+    // divergent parent.
+    try {
+      parent.removeChild(child);
+    } catch {
+      /* may or may not fire through strict again */
+    }
+    try {
+      parent.remove();
+    } catch {
+      /* ditto */
+    }
   });
 });
