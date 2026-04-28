@@ -1,5 +1,20 @@
-//! perrr-dom: mutable DOM tree with handle-based identity.
+//! perrr-dom: native DOM tree with u32 handle identity.
 //!
-//! Empty at M1. Contract arrives with the M2 milestone spec.
-//! See `specs/overview/00-tdd.md` and the forthcoming
-//! `specs/crates/perrr-dom/spec.md`.
+//! Spec: `specs/crates/perrr-dom/spec.md`
+//! API coverage: `specs/overview/03-dom-api-coverage.md`
+//!
+//! This crate owns node identity. The tree is behavior-only at v0.1;
+//! style, layout, and paint live in downstream crates (M3+).
+//!
+//! All operations are single-threaded by design: one Tree per V8
+//! isolate, serialized at the N-API boundary.
+
+#![deny(clippy::all)]
+
+mod error;
+mod node;
+mod tree;
+
+pub use error::DomError;
+pub use node::{Attr, AttrList, NodeId, NodeKind, NODE_ID_INVALID};
+pub use tree::Tree;
