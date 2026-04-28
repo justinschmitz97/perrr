@@ -192,14 +192,20 @@ fn set_text_content_replaces_children() {
 #[test]
 fn free_node_recurses_and_clears_active_element() {
     let mut tree = Tree::new();
+    let body = tree.children(tree.children(tree.document())[0])[1];
     let parent = tree.create_element("div");
     let child = tree.create_element("button");
+    // Attach to body so the focused node is connected to the document.
+    tree.append_child(body, parent).unwrap();
     tree.append_child(parent, child).unwrap();
     tree.focus(child).unwrap();
     assert_eq!(tree.active_element(), child);
+    assert_eq!(tree.explicitly_focused(), child);
     tree.free_node(parent);
     assert_eq!(tree.node_kind(child), None);
-    assert_eq!(tree.active_element(), NODE_ID_INVALID);
+    // Explicit focus cleared; activeElement falls back to body per HTML spec.
+    assert_eq!(tree.explicitly_focused(), NODE_ID_INVALID);
+    assert_eq!(tree.active_element(), body);
 }
 
 #[test]
@@ -212,13 +218,44 @@ fn focus_requires_element() {
 #[test]
 fn blur_only_clears_if_active() {
     let mut tree = Tree::new();
+    let body = tree.children(tree.children(tree.document())[0])[1];
     let a = tree.create_element("button");
     let b = tree.create_element("button");
+    tree.append_child(body, a).unwrap();
+    tree.append_child(body, b).unwrap();
     tree.focus(a).unwrap();
     tree.blur(b);
     assert_eq!(tree.active_element(), a);
+    assert_eq!(tree.explicitly_focused(), a);
     tree.blur(a);
-    assert_eq!(tree.active_element(), NODE_ID_INVALID);
+    // Explicit focus cleared; active_element falls back to body.
+    assert_eq!(tree.explicitly_focused(), NODE_ID_INVALID);
+    assert_eq!(tree.active_element(), body);
+}
+
+#[test]
+fn active_element_defaults_to_body_per_spec() {
+    let tree = Tree::new();
+    let body = tree.children(tree.children(tree.document())[0])[1];
+    assert_eq!(tree.explicitly_focused(), NODE_ID_INVALID);
+    assert_eq!(tree.active_element(), body);
+}
+
+#[test]
+fn disconnected_focused_element_falls_back_to_body() {
+    // HTML spec: if the focused element is disconnected from the
+    // document, browsers implicitly treat it as blurred.
+    let mut tree = Tree::new();
+    let body = tree.children(tree.children(tree.document())[0])[1];
+    let btn = tree.create_element("button");
+    tree.append_child(body, btn).unwrap();
+    tree.focus(btn).unwrap();
+    assert_eq!(tree.active_element(), btn);
+    // Remove from body (still alive, but no longer in the document).
+    tree.remove_child(body, btn).unwrap();
+    assert_eq!(tree.explicitly_focused(), btn); // state retained
+    assert_eq!(tree.active_element(), body); // but spec says body
+    assert!(!tree.is_connected(btn));
 }
 
 #[test]

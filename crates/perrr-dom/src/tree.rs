@@ -20,7 +20,12 @@ pub struct Tree {
     nodes: Vec<Option<Node>>,
     free_list: Vec<NodeId>,
     document: NodeId,
+    /// `NODE_ID_INVALID` when nothing has `.focus()`'d. Distinct from
+    /// the value reported by `active_element()`: HTML spec says if
+    /// nothing is focused, `document.activeElement` is the body
+    /// element (or null if no body). See `default_active_element`.
     active_element: NodeId,
+    body: NodeId,
 }
 
 impl Default for Tree {
@@ -38,12 +43,14 @@ impl Tree {
             free_list: Vec::new(),
             document: NODE_ID_INVALID,
             active_element: NODE_ID_INVALID,
+            body: NODE_ID_INVALID,
         };
         let document = tree.insert(Node::document());
         let html = tree.insert(Node::element("html".into(), HTML_NS.into()));
         let head = tree.insert(Node::element("head".into(), HTML_NS.into()));
         let body = tree.insert(Node::element("body".into(), HTML_NS.into()));
         tree.document = document;
+        tree.body = body;
         // Wire up document > html > {head, body}.
         tree.link(document, html);
         tree.link(html, head);
@@ -84,7 +91,41 @@ impl Tree {
         }
     }
 
+    /// `Document.activeElement` per HTML spec:
+    /// - the explicitly-focused element if it's still connected to the
+    ///   document (browsers implicitly blur disconnected elements);
+    /// - else the body element;
+    /// - else `NODE_ID_INVALID` (body removed).
     pub fn active_element(&self) -> NodeId {
+        if self.active_element != NODE_ID_INVALID
+            && self.node(self.active_element).is_some()
+            && self.is_connected(self.active_element)
+        {
+            return self.active_element;
+        }
+        if self.node(self.body).is_some() {
+            return self.body;
+        }
+        NODE_ID_INVALID
+    }
+
+    /// True if the node is in the document tree (reachable from
+    /// `document` via the parent chain).
+    pub fn is_connected(&self, id: NodeId) -> bool {
+        let mut current = id;
+        while current != NODE_ID_INVALID {
+            if current == self.document {
+                return true;
+            }
+            current = self.parent_node(current);
+        }
+        false
+    }
+
+    /// Raw explicit focus: the element on which `.focus()` was last
+    /// called (or cleared by `.blur()` / `free_node`). Never falls
+    /// back to body. Used for testing + metrics.
+    pub fn explicitly_focused(&self) -> NodeId {
         self.active_element
     }
 

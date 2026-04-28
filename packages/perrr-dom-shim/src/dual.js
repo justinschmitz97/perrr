@@ -333,6 +333,10 @@ export function installDualBackend(options = {}) {
   patchFocusBlur();
   patchActiveElementGetter();
 
+  // ----- H10a: listener registry mirror (counter-level).
+  //   Full dispatch-path parity is H10b (not yet implemented).
+  patchEventListeners();
+
   // ----- Read-side: verify queries agree between backends.
   patchQuery("matches", function (selector) {
     const id = idOf.get(this);
@@ -430,6 +434,128 @@ function installTrackers() {
   // Form controls.
   trackerWrap(HTMLInput, "value", "HTMLInputElement.set value");
   trackerWrap(HTMLInput, "checked", "HTMLInputElement.set checked");
+}
+
+function patchEventListeners() {
+  // Resolve the EventTarget prototype from a REAL node's chain.
+  // happy-dom exposes `globalThis.EventTarget` as one object but
+  // its DOM nodes inherit from a different EventTarget class
+  // internally — patching the global variant has no effect on
+  // actual node calls. Walk `document`'s chain to find the one
+  // that really owns addEventListener.
+  let EventTarget = null;
+  let proto = globalThis.document
+    ? Object.getPrototypeOf(globalThis.document)
+    : globalThis.EventTarget?.prototype ?? null;
+  while (proto) {
+    if (Object.getOwnPropertyDescriptor(proto, "addEventListener")) {
+      EventTarget = proto;
+      break;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  if (!EventTarget) return;
+
+  // Capture originals now (after happy-dom registered globals);
+  // the patched versions call these.
+  const originalAdd = EventTarget.addEventListener;
+  const originalRem = EventTarget.removeEventListener;
+
+  const seenByNode = new WeakMap();
+
+  const keyOf = (type, listener, options) => {
+    const capture =
+      typeof options === "boolean"
+        ? options
+        : !!(options && options.capture);
+    // listener identity isn't stringifiable; use an identity map
+    // per node.
+    return { type: String(type), listener, capture };
+  };
+
+  const has = (node, k) => {
+    const set = seenByNode.get(node);
+    if (!set) return false;
+    for (const e of set) {
+      if (e.type === k.type && e.listener === k.listener && e.capture === k.capture) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const add = (node, k) => {
+    let set = seenByNode.get(node);
+    if (!set) {
+      set = new Set();
+      seenByNode.set(node, set);
+    }
+    set.add(k);
+  };
+
+  const del = (node, k) => {
+    const set = seenByNode.get(node);
+    if (!set) return false;
+    for (const e of set) {
+      if (e.type === k.type && e.listener === k.listener && e.capture === k.capture) {
+        set.delete(e);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  patch(EventTarget, "addEventListener", {
+    configurable: true,
+    writable: true,
+    value: function (type, listener, options) {
+      const result = originalAdd.call(this, type, listener, options);
+      const s = getState();
+      const id = s?.idOf.get(this);
+      if (id == null) {
+        // Ignore non-node targets (Window without bimap entry, etc.).
+        return result;
+      }
+      const k = keyOf(type, listener, options);
+      if (has(this, k)) return result; // duplicate — spec says no-op
+      add(this, k);
+      try {
+        s.native.incrListener(id);
+      } catch (e) {
+        pushDivergence({
+          kind: "mirror-throw",
+          op: "addEventListener",
+          type: k.type,
+          error: String(e),
+        });
+      }
+      return result;
+    },
+  });
+
+  patch(EventTarget, "removeEventListener", {
+    configurable: true,
+    writable: true,
+    value: function (type, listener, options) {
+      const result = originalRem.call(this, type, listener, options);
+      const s = getState();
+      const id = s?.idOf.get(this);
+      if (id == null) return result;
+      const k = keyOf(type, listener, options);
+      if (!del(this, k)) return result; // no matching registration
+      try {
+        s.native.decrListener(id);
+      } catch (e) {
+        pushDivergence({
+          kind: "mirror-throw",
+          op: "removeEventListener",
+          type: k.type,
+          error: String(e),
+        });
+      }
+      return result;
+    },
+  });
 }
 
 function patchFocusBlur() {

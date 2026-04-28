@@ -263,6 +263,36 @@ describe.skipIf(!dualMode)("dual harness self-test", () => {
     clearDivergences();
   });
 
+  it("H10a — addEventListener / removeEventListener mirror the listener counter", () => {
+    const native = nativeInstance();
+    expect(native).not.toBeNull();
+    const before = native!.totalListenerCount();
+
+    const btn = document.createElement("button");
+    document.body.appendChild(btn);
+    const f1 = () => {};
+    const f2 = () => {};
+    btn.addEventListener("click", f1);
+    btn.addEventListener("keydown", f2);
+    expect(native!.totalListenerCount()).toBe(before + 2);
+
+    // Duplicate add — spec says no-op; counter should not move.
+    btn.addEventListener("click", f1);
+    expect(native!.totalListenerCount()).toBe(before + 2);
+
+    // Remove one; counter drops.
+    btn.removeEventListener("click", f1);
+    expect(native!.totalListenerCount()).toBe(before + 1);
+
+    // freeNode on the element should drain its remaining listener count.
+    btn.remove();
+    // HD's removeChild path doesn't call native.freeNode; listeners
+    // count stays at +1 for the detached node (documented behavior).
+    // Explicitly remove the second listener to prove the mirror path.
+    btn.removeEventListener("keydown", f2);
+    expect(native!.totalListenerCount()).toBe(before);
+  });
+
   it.skipIf(!strictMode)("strict mode throws at the op that introduces divergence", async () => {
     // @ts-expect-error
     const { clearDivergences } = await import("perrr-dom-shim/dual");
