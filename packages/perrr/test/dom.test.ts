@@ -98,16 +98,30 @@ describe("PerrrDom via N-API", () => {
     expect(dom.nodeData(c[0]!)).toBe("fresh");
   });
 
-  it("focus tracks activeElement; blur clears", () => {
+  it("focus tracks activeElement; blur clears to body (HTML spec)", () => {
     const dom = new PerrrDom();
+    const body = dom.children(dom.children(dom.documentId())[0]!)[1]!;
     const a = dom.createElement("button");
     const b = dom.createElement("button");
+    dom.appendChild(body, a);
+    dom.appendChild(body, b);
     dom.focus(a);
     expect(dom.activeElement()).toBe(a);
     dom.blur(b);
     expect(dom.activeElement()).toBe(a);
     dom.blur(a);
-    expect(dom.activeElement()).toBe(0);
+    // Spec: when nothing is focused, activeElement is body.
+    expect(dom.activeElement()).toBe(body);
+  });
+
+  it("disconnected focused element falls back to body (HTML spec)", () => {
+    const dom = new PerrrDom();
+    const body = dom.children(dom.children(dom.documentId())[0]!)[1]!;
+    const a = dom.createElement("button");
+    // Never attached to the tree — disconnected.
+    dom.focus(a);
+    // Spec: disconnected elements are implicitly blurred.
+    expect(dom.activeElement()).toBe(body);
   });
 
   it("listener counter balances through incr/decr/freeNode", () => {
