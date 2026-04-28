@@ -24,7 +24,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.95.0"
-      - run: cargo test --workspace
+      # perrr-node is excluded: its integration test links against the
+      # napi-rs crate which needs N-API symbols provided at runtime by
+      # Node. On Linux, rust-lld rejects undefined symbols at link
+      # time. perrr-node's compile is still covered by the build
+      # matrix (which produces the actual .node binary); `hello()`
+      # behavior is covered by packages/perrr/test/smoke.test.ts.
+      - run: cargo test --workspace --exclude perrr-node
 
   build:
     name: build-${{ matrix.settings.target }}
