@@ -14,7 +14,10 @@ const fixturesDir = path
 export default defineConfig({
   test: {
     environment: "perrr",
-    include: [`${fixturesDir}/components/**/*.test.tsx`],
+    include: [
+      `${fixturesDir}/components/**/*.test.tsx`,
+      "./test/dual-sanity.test.ts",
+    ],
     globals: false,
   },
   resolve: {

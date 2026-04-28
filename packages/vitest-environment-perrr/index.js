@@ -13,10 +13,18 @@ import {
   summarizeCallLog,
   clearCallLog,
 } from "perrr-dom-shim";
+import {
+  installDualBackend,
+  disposeDualBackend,
+  verifyDualShapes,
+  getDivergences,
+} from "perrr-dom-shim/dual";
 import fs from "node:fs";
 import path from "node:path";
 
 const harvest = process.env["PERRR_HARVEST"] === "1";
+const dual = process.env["PERRR_DUAL"] === "1";
+const dualStrict = process.env["PERRR_DUAL_STRICT"] === "1";
 
 /** @type {import('vitest/environments').Environment} */
 export default {
@@ -25,6 +33,7 @@ export default {
   setup() {
     if (harvest) clearCallLog();
     installGlobals({ harvest });
+    if (dual || dualStrict) installDualBackend({ strict: dualStrict });
     return {
       async teardown() {
         if (harvest) {
@@ -35,6 +44,27 @@ export default {
             path.join(outDir, "miss-log.json"),
             JSON.stringify(summary, null, 2),
           );
+        }
+        if (dual || dualStrict) {
+          try {
+            const stats = verifyDualShapes();
+            const outDir = path.resolve(process.cwd(), ".perrr");
+            fs.mkdirSync(outDir, { recursive: true });
+            fs.writeFileSync(
+              path.join(outDir, "dual-report.json"),
+              JSON.stringify(
+                {
+                  mode: dualStrict ? "strict" : "loose",
+                  stats,
+                  divergences: getDivergences(),
+                },
+                null,
+                2,
+              ),
+            );
+          } finally {
+            disposeDualBackend();
+          }
         }
         await uninstallGlobals();
       },

@@ -65,8 +65,18 @@ last-reviewed: 2026-04-28
 - (Package name per ADR 0003; consumers write `environment: "perrr"`.)
 
 ## Tests
-- `test/facade.test.ts` — `instanceof` checks; identity stability; fail-loud on unimplemented; `classList.add/remove/contains`; `dispatchEvent` → listener invoked.
+- `test/facade.test.ts` — `instanceof` checks; identity stability; fail-loud on unimplemented; `classList.add/remove/contains`; `dispatchEvent` → listener invoked. _(Pending: facade-native swap lives in a later round.)_
 - `test/logging-proxy.test.ts` — unknown API in logging mode emits structured log entry; in strict mode throws with location.
+- `packages/perrr/test/dual-sanity.test.ts` — proves the differential harness (`perrr-dom-shim/dual`) actually detects divergence: 4 cases — baseline matches; native-only mutation fires the detector; HD-only mutation (innerHTML) fires the detector; op counter advances.
+
+## Differential harness (`perrr-dom-shim/dual`)
+- Purpose: validate perrr-dom tree semantics match happy-dom's byte-for-byte before cutting happy-dom.
+- `installDualBackend({ strict? })` — monkey-patches happy-dom's Document/Element/Node/CharacterData prototypes; every mutation mirrors to a parallel perrr-dom `Tree`. Strict mode verifies full serialization after each op.
+- `verifyDualShapes()` — serializes both trees (sorted attrs, stable ordering) and throws on divergence with character-level excerpts.
+- `installDualBackend` hooks: `createElement{,NS}`, `createTextNode`, `createComment`, `createDocumentFragment`, `appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `setAttribute`, `removeAttribute`, `toggleAttribute`, `CharacterData.data`/`nodeValue` setters.
+- Env vars: `PERRR_DUAL=1` (teardown-only verify), `PERRR_DUAL_STRICT=1` (per-op verify). Both emit `.perrr/dual-report.json`.
+- State on `globalThis.__perrr_dual_state__` so it crosses vitest's env↔test-file module boundary.
+- Validated on 2026-04-28: **accordion.test.tsx runs 4,196 mutations in strict mode with zero divergence.**
 
 ## Open
 - Exact prototype-chain shape required by React 19's internals (e.g. whether `Element.prototype.attachInternals` needs to exist). Resolve during M2a miss-log.
@@ -74,3 +84,5 @@ last-reviewed: 2026-04-28
 
 ## Changelog
 - 2026-04-28: initial draft (M2 planning).
+- 2026-04-28: 4b shipped happy-dom backend via `installGlobals/uninstallGlobals/resetDocument`; dual-export `perrr-dom-shim/harvest` for call-counter instrumentation.
+- 2026-04-28: 4e.ii added `perrr-dom-shim/dual` differential harness. Validated: 4,196 tree mutations across accordion fixture, 0 divergence, detector proven to fire via self-tests.

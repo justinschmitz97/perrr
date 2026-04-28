@@ -8,7 +8,8 @@
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./harvest": "./src/harvest.js"
+    "./harvest": "./src/harvest.js",
+    "./dual": "./src/dual.js"
   },
   "files": ["src"],
   "peerDependencies": {
