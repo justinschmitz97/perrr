@@ -40,7 +40,10 @@ jobs:
         settings:
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-          - host: macos-13
+          # Both Darwin targets cross-compile from Apple Silicon
+          # (macos-14) to avoid the chronic queue delays on the
+          # macos-13 x86_64 runner pool.
+          - host: macos-14
             target: x86_64-apple-darwin
           - host: macos-14
             target: aarch64-apple-darwin
