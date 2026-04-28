@@ -40,7 +40,13 @@ last-reviewed: 2026-04-28
   - `active_element` follows HTML spec: returns the explicitly-focused element if it's still connected to the document, else body, else `NODE_ID_INVALID`. Disconnected elements are implicitly treated as blurred.
   - `explicitly_focused` exposes the raw focus-state field without the spec fallback (testing + metrics).
   - `is_connected(id)` walks parent chain to document.
-- Listener counter: `incr_listener`, `decr_listener`, `listener_count`, `total_listener_count` (drives M8 metric).
+- Event listener registry: `Listener { id, event_type, capture, once, passive }` struct.
+  - `add_event_listener(node, Listener)` — dedup per spec on (event_type, id, capture).
+  - `remove_event_listener(node, type, id, capture) -> bool`.
+  - `has_listener_of_type(node, type) -> bool` — ignores capture flag.
+  - `listeners(node) -> Vec<Listener>` — clone.
+  - `listener_count(node)`, `total_listener_count()` — delegate to `Vec::len`.
+- Drives M8 listener metric + foundation for native event dispatch (H10c, future).
 - Deterministic iteration order: `children(id)` returns children in insertion order.
 - Return `Result<T, DomError>` for every fallible op (invalid node, cycle, not-a-child, reference not in parent, wrong kind).
 
@@ -103,3 +109,4 @@ last-reviewed: 2026-04-28
 - 2026-04-28: 4e.v — **bug fix: HTML attribute name case-sensitivity.** HTML elements now lowercase names on set + lookup (spec-compliant); SVG preserves case. Bug caught by dual harness H8 test. Rust tests added in `tests/attr_case.rs`.
 - 2026-04-28: 4e.vi — stale NodeId behavior documented via `tests/stale_ids.rs`. No bug; footgun made explicit. Generation counter upgrade path noted.
 - 2026-04-28: 4e.vii — `active_element` made spec-compliant: defaults to body when nothing is focused; implicitly blurs disconnected elements. Caught by dual harness activeElement read-compare (235 divergences before fix, 0 after). Added `body: NodeId` field, `is_connected(id)`, `explicitly_focused()`. 3 test updates + 1 new test.
+- 2026-04-28: 4e.viii (H10b) — listener registry upgraded from a counter to a real `Vec<Listener>` per node. `Listener { id, event_type, capture, once, passive }`. `add_event_listener` with spec dedup; `remove_event_listener` returns bool; `has_listener_of_type` for future dispatch path. `incr_listener`/`decr_listener` removed (the dual harness now drives a real listener id). 3 new Rust tests covering dedup, has_of_type, remove-matching semantics.

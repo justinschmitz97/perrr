@@ -63,7 +63,7 @@ last-reviewed: 2026-04-28
   - text: `textContent`, `setTextContent`, `nodeData`, `setNodeData`
   - selectors: `matches`, `querySelector`, `querySelectorAll`, `closest` (added 4e.i; parse errors surface as `napi::Error` with `Status::InvalidArg`)
   - focus: `focus`, `blur`
-  - metric: `incrListener`, `decrListener`, `listenerCount`, `totalListenerCount`
+  - events: `addEventListener(node, type, listenerId, capture, once, passive)`, `removeEventListener(node, type, listenerId, capture) -> bool`, `hasListenerOfType(node, type) -> bool`, `listenerCount`, `totalListenerCount`
 - `#[napi(object)] AttrRecord { name, value }` DTO (reserved for future `getAttributeNode`-style ops).
 
 ## Target triples (v0.1)
@@ -89,3 +89,4 @@ last-reviewed: 2026-04-28
 - 2026-04-28: pinned `@napi-rs/cli` to `^3.0.0` (v2 CLI lacks `--manifest-path`; v3 required for split crate/package layout).
 - 2026-04-28: added `PerrrDom` class wrapping `perrr_dom::Tree` with Tier 1+2 surface (32 methods). Validated by 11 JS unit tests in `packages/perrr/test/dom.test.ts`.
 - 2026-04-28: added selector ops (`matches`, `querySelector`, `querySelectorAll`, `closest`) — round 4e.i. Parse errors surface as napi errors with preserved message. 2 additional JS unit tests; 14 total in `dom.test.ts`.
+- 2026-04-28: 4e.viii (H10b) — replaced `incrListener`/`decrListener` counter ops with real listener registry: `addEventListener(node, type, listenerId, capture, once, passive)`, `removeEventListener(node, type, listenerId, capture) -> bool`, `hasListenerOfType(node, type) -> bool`. `listenerCount`/`totalListenerCount` delegate to registry length. Breaking change but M2c-internal; dual harness migrated in same round.

@@ -274,8 +274,9 @@ All of Tier 1+2 reachability implies these ARE called; M2c implementation plan c
 | Focus tracking (focus, blur, activeElement) | ✓ | ✓ (H9 closed; activeElement spec-compliant; dual harness verifies on every read) |
 | Text content | ✓ | ✓ (after H1d fix; 158 previously-unmirrored setter calls now verified per-op) |
 | Listener counter (incrListener, decrListener, listenerCount, totalListenerCount) | ✓ | no HD equivalent (perrr-specific metric for M8) |
-| addEventListener / removeEventListener | ✓ (counter only, no storage) | ✓ (H10a closed; listener counter mirrored, dedup per spec) |
-| Event dispatch (dispatchEvent, capture/target/bubble, preventDefault, stopPropagation) | ✗ | ✗ (H10b open — deferred to event-system milestone; HD still handles actual dispatch) |
+| addEventListener / removeEventListener | ✓ (full registry: id, type, capture, once, passive; spec dedup) | ✓ (H10a+H10b closed) |
+| has_listener_of_type | ✓ | — (foundation for dispatch path) |
+| Event dispatch (dispatchEvent, capture/target/bubble, preventDefault, stopPropagation) | ✗ | ✗ (H10c open — HD still handles actual firing) |
 | Layout APIs (getBoundingClientRect, offsetWidth/Height, clientWidth/Height, scrollWidth/Height) | ✗ | ✗ (stubbed zeros; M4 work) |
 | getComputedStyle | ✗ | ✗ (stubbed; M3 work) |
 | MutationObserver / ResizeObserver / IntersectionObserver / PerformanceObserver | ✗ | ✗ (noop stubs; M7 for PerformanceObserver, later for others if fixtures demand) |
