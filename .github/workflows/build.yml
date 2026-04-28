@@ -46,12 +46,15 @@ jobs:
             target: aarch64-apple-darwin
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - host: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
-          - host: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+          # aarch64-unknown-linux-gnu + x86_64-unknown-linux-musl
+          # dropped from CI for now. The napi-rs nodejs-rust docker
+          # images (ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+          # and :lts-alpine) are ~1+ year stale and ship Node 18, but
+          # @napi-rs/cli v3's transitive dep @inquirer/core uses
+          # styleText from 'node:util' which requires Node 20.8+.
+          # Revisit when napi-rs publishes newer images OR when we
+          # invest in our own Dockerfile. Non-blocking for v0.1 since
+          # the 4 native triples cover >95% of users.
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4

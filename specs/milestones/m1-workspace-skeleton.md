@@ -56,21 +56,21 @@ last-reviewed: 2026-04-27
 - Rust: pinned to `1.95.0` in `rust-toolchain.toml` (2026-04-28 bump from 1.85; latest stable at kickoff).
 - napi-rs: `@napi-rs/cli ^3.6.2` + `napi`/`napi-derive` `^3`; `@napi-rs/cli` drives build + per-platform package generation.
 
-## Target triples (M1 CI matrix)
-| triple | runner |
-|---|---|
-| x86_64-pc-windows-msvc | windows-latest |
-| x86_64-apple-darwin | macos-13 |
-| aarch64-apple-darwin | macos-14 |
-| x86_64-unknown-linux-gnu | ubuntu-latest |
-| aarch64-unknown-linux-gnu | ubuntu-latest (cross) |
-| x86_64-unknown-linux-musl | ubuntu-latest (cross) |
+## Target triples (M1 CI matrix — v0.1 scope)
+| triple | runner | status |
+|---|---|---|
+| x86_64-pc-windows-msvc | windows-latest | CI |
+| x86_64-apple-darwin | macos-13 | CI |
+| aarch64-apple-darwin | macos-14 | CI |
+| x86_64-unknown-linux-gnu | ubuntu-latest | CI |
+| aarch64-unknown-linux-gnu | ubuntu-latest (cross) | **dropped from CI v0.1** — napi-rs docker image ships Node 18, `@napi-rs/cli` v3 needs Node ≥20.8 |
+| x86_64-unknown-linux-musl | ubuntu-latest (cross) | **dropped from CI v0.1** — same reason |
 
 ## Done-when
 - [x] `pnpm install && pnpm build && pnpm test` green locally on Windows.
 - [x] Remote configured (2026-04-28: `github.com/justinschmitz97/perrr`).
-- [/] CI green on all 6 target triples. _(4/6 passing as of 4e.vii: windows-msvc, linux-x64-gnu, mac-x64, mac-arm64. Docker jobs — aarch64-linux-gnu, linux-x64-musl — blocked on corepack signature issue in the napi-rs docker image; fix landed but not yet verified on a clean run.)_
-- [/] Prebuilt `.node` artifacts downloadable from the workflow run. _(4 triples uploading artifacts currently; 2 blocked behind docker fix.)_
+- [/] CI green on primary target triples. _(4/4 native triples passing: windows-msvc, linux-x64-gnu, mac-x64, mac-arm64. Docker-cross triples dropped from v0.1 per Target-triples table — revisit when napi-rs publishes Node ≥20 images.)_
+- [/] Prebuilt `.node` artifacts downloadable from the workflow run. _(4 triples uploading; musl + arm64-linux deferred to a follow-on release.)_
 - [x] `specs/crates/perrr-node/spec.md` created.
 - [x] PR-equivalent commit messages contain the `Spec updated:` line.
 - [ ] On merge: archive spec. _(Trunk development; M1 is retroactively "shipped" once the last 2 CI triples go green; archival after.)_
@@ -89,4 +89,5 @@ last-reviewed: 2026-04-27
 - 2026-04-28: bumped to latest stable everywhere (Rust `1.95.0`; `napi` / `napi-derive` Rust crates `^3`). Reason: `napi-build@2.3.1` requires rustc ≥1.88; also aligns with project policy of tracking current stable.
 - 2026-04-28: added explicit `vite ^8.0.8` devDep to `packages/perrr`. Reason: Vitest 4 peer-depends on Vite 6/7/8; pnpm resolved a transitive Vite 5 which broke `./module-runner` export at runtime.
 - 2026-04-28: done-when status updated — local criteria satisfied; CI/remote criteria remain blocked pending git remote. Spec stays `approved` until archival on merge.
-- 2026-04-28: remote added (`github.com/justinschmitz97/perrr`). First CI run: 3 pass (cargo test, lint, linux-x64-gnu build), 2 failed on pnpm version conflict (fixed: remove action pin, use packageManager field), 1 failed on cargo test linking N-API symbols (fixed: exclude perrr-node from workspace test). Second run: 4 native triples green (win-x64, mac-x64, mac-arm64, linux-x64-gnu); 2 docker triples (aarch64-linux-gnu, linux-x64-musl) fail on corepack signature verification in napi-rs docker image (fix: install pnpm via npm, skip corepack; verification pending).
+- 2026-04-28: remote added (`github.com/justinschmitz97/perrr`). First CI run: 3 pass (cargo test, lint, linux-x64-gnu build), 2 failed on pnpm version conflict (fixed: remove action pin, use packageManager field), 1 failed on cargo test linking N-API symbols (fixed: exclude perrr-node from workspace test). Second run: 4 native triples green (win-x64, mac-x64, mac-arm64, linux-x64-gnu); 2 docker triples (aarch64-linux-gnu, linux-x64-musl) fail on corepack signature verification in napi-rs docker image (fix attempted: install pnpm via npm bypass corepack; next failure: napi-rs docker images ship Node 18 which is too old for @napi-rs/cli v3's transitive @inquirer/core styleText import).
+- 2026-04-28: docker-cross triples dropped from v0.1 scope. Decision: the 4 native triples cover >95% of users; revisit aarch64-linux + musl after napi-rs publishes Node ≥20 images OR when we write our own Dockerfile.
