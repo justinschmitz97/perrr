@@ -23,6 +23,6 @@
     "test": "node -e \"console.log('vitest-environment-perrr: no own tests at M2a')\""
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   }
 }

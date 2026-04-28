@@ -25,6 +25,6 @@
     "test": "node -e \"console.log('perrr-dom-shim: tests added in 4b inline')\""
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   }
 }

@@ -28,7 +28,7 @@ last-reviewed: 2026-04-27
 - `packages/perrr` reexports from `perrr-node`; `require("perrr").hello() === "ok"`.
 - GitHub Actions builds prebuilts for 6 target triples; uploads to workflow artifacts.
 - Root `README.md`, `LICENSE` (MIT), `.gitignore`, `rust-toolchain.toml` pinning stable.
-- Node `engines.node: ">=20.0.0"`.
+- Node `engines.node: ">=24.0.0"` (Node 24.15 LTS at M1 kickoff; Node 20 reached EOL 2026-04-30).
 - pnpm lockfile committed.
 
 ### MUST NOT

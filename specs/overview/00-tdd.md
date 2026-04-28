@@ -102,7 +102,7 @@ last-reviewed: 2026-04-27
 - Determinism: byte-identical with `PERRR_DETERMINISTIC=1`.
 - Memory: 1000 mount/unmount cycles → RSS growth <10 MB after manual GC.
 - Cold install: prebuilt only; no Rust toolchain at install.
-- Node: 20 LTS + 22. No Node 18.
+- Node: 24 LTS (current as of 2026-04-15; supported through 2028-04-30). Engines pinned `>=24.0.0`.
 
 ## Changelog
 - 2026-04-27: approved snapshot.
