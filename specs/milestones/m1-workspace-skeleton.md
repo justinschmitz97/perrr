@@ -60,7 +60,7 @@ last-reviewed: 2026-04-27
 | triple | runner | status |
 |---|---|---|
 | x86_64-pc-windows-msvc | windows-latest | CI |
-| x86_64-apple-darwin | macos-13 | CI |
+| x86_64-apple-darwin | macos-14 (cross-compiled from Apple Silicon; macos-13 runner pool had chronic queue stalls) | CI |
 | aarch64-apple-darwin | macos-14 | CI |
 | x86_64-unknown-linux-gnu | ubuntu-latest | CI |
 | aarch64-unknown-linux-gnu | ubuntu-latest (cross) | **dropped from CI v0.1** — napi-rs docker image ships Node 18, `@napi-rs/cli` v3 needs Node ≥20.8 |
@@ -91,3 +91,4 @@ last-reviewed: 2026-04-27
 - 2026-04-28: done-when status updated — local criteria satisfied; CI/remote criteria remain blocked pending git remote. Spec stays `approved` until archival on merge.
 - 2026-04-28: remote added (`github.com/justinschmitz97/perrr`). First CI run: 3 pass (cargo test, lint, linux-x64-gnu build), 2 failed on pnpm version conflict (fixed: remove action pin, use packageManager field), 1 failed on cargo test linking N-API symbols (fixed: exclude perrr-node from workspace test). Second run: 4 native triples green (win-x64, mac-x64, mac-arm64, linux-x64-gnu); 2 docker triples (aarch64-linux-gnu, linux-x64-musl) fail on corepack signature verification in napi-rs docker image (fix attempted: install pnpm via npm bypass corepack; next failure: napi-rs docker images ship Node 18 which is too old for @napi-rs/cli v3's transitive @inquirer/core styleText import).
 - 2026-04-28: docker-cross triples dropped from v0.1 scope. Decision: the 4 native triples cover >95% of users; revisit aarch64-linux + musl after napi-rs publishes Node ≥20 images OR when we write our own Dockerfile.
+- 2026-04-28: switched `x86_64-apple-darwin` host from `macos-13` to `macos-14` (cross-compile from Apple Silicon). macos-13 runner pool had 20+ minute queue stalls on successive runs; macos-14 completes in <1 min. No binary-behavior change.
