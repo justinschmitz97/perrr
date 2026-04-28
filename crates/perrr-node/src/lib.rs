@@ -258,6 +258,38 @@ impl PerrrDom {
         self.tree.set_node_data(node, value).map_err(to_napi_err)
     }
 
+    // ----- Selector queries -----
+
+    #[napi]
+    pub fn matches(&self, node: u32, selector: String) -> Result<bool> {
+        let list = perrr_dom::parse_selector(&selector)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(self.tree.matches(node, &list))
+    }
+
+    /// Returns `0` if no match.
+    #[napi]
+    pub fn query_selector(&self, root: u32, selector: String) -> Result<u32> {
+        let list = perrr_dom::parse_selector(&selector)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(self.tree.query_selector(root, &list).unwrap_or(0))
+    }
+
+    #[napi]
+    pub fn query_selector_all(&self, root: u32, selector: String) -> Result<Vec<u32>> {
+        let list = perrr_dom::parse_selector(&selector)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(self.tree.query_selector_all(root, &list))
+    }
+
+    /// Returns `0` if no ancestor (inclusive) matches.
+    #[napi]
+    pub fn closest(&self, node: u32, selector: String) -> Result<u32> {
+        let list = perrr_dom::parse_selector(&selector)
+            .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+        Ok(self.tree.closest(node, &list).unwrap_or(0))
+    }
+
     // ----- Focus -----
 
     #[napi]

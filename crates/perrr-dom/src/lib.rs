@@ -13,8 +13,10 @@
 
 mod error;
 mod node;
+pub mod selector;
 mod tree;
 
 pub use error::DomError;
 pub use node::{Attr, AttrList, NodeId, NodeKind, NODE_ID_INVALID};
+pub use selector::{parse as parse_selector, ParseError as SelectorParseError, SelectorList};
 pub use tree::Tree;

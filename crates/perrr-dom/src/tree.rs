@@ -11,6 +11,7 @@
 
 use crate::error::DomError;
 use crate::node::{Attr, Node, NodeId, NodeKind, NODE_ID_INVALID};
+use crate::selector::{self, SelectorList};
 
 const HTML_NS: &str = "http://www.w3.org/1999/xhtml";
 
@@ -433,6 +434,26 @@ impl Tree {
         }
         node.text = value;
         Ok(())
+    }
+
+    // --------------------------------------------------------------
+    // Selector queries
+    // --------------------------------------------------------------
+
+    pub fn matches(&self, node: NodeId, selector: &SelectorList) -> bool {
+        selector::matches(self, node, selector)
+    }
+
+    pub fn query_selector(&self, root: NodeId, selector: &SelectorList) -> Option<NodeId> {
+        selector::query_selector(self, root, selector)
+    }
+
+    pub fn query_selector_all(&self, root: NodeId, selector: &SelectorList) -> Vec<NodeId> {
+        selector::query_selector_all(self, root, selector)
+    }
+
+    pub fn closest(&self, node: NodeId, selector: &SelectorList) -> Option<NodeId> {
+        selector::closest(self, node, selector)
     }
 
     // --------------------------------------------------------------

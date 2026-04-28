@@ -143,4 +143,35 @@ describe("PerrrDom via N-API", () => {
     dom.appendChild(a, b);
     expect(() => dom.appendChild(b, a)).toThrow(/cycle/i);
   });
+
+  it("selector matches / querySelector / querySelectorAll / closest", () => {
+    const dom = new PerrrDom();
+    const body = dom.children(dom.children(dom.documentId())[0]!)[1]!;
+    const outer = dom.createElement("section");
+    dom.setAttribute(outer, "class", "wrap");
+    dom.appendChild(body, outer);
+    const btnA = dom.createElement("button");
+    dom.setAttribute(btnA, "data-state", "open");
+    dom.setAttribute(btnA, "class", "trigger");
+    dom.appendChild(outer, btnA);
+    const btnB = dom.createElement("button");
+    dom.setAttribute(btnB, "data-state", "closed");
+    dom.setAttribute(btnB, "class", "trigger");
+    dom.appendChild(outer, btnB);
+
+    expect(dom.matches(btnA, '[data-state="open"]')).toBe(true);
+    expect(dom.matches(btnB, '[data-state="open"]')).toBe(false);
+    expect(dom.matches(btnA, ".trigger")).toBe(true);
+    expect(dom.matches(btnA, ".wrap > .trigger")).toBe(true);
+
+    expect(dom.querySelector(dom.documentId(), ".trigger")).toBe(btnA);
+    expect(dom.querySelectorAll(dom.documentId(), ".trigger")).toEqual([btnA, btnB]);
+    expect(dom.closest(btnA, ".wrap")).toBe(outer);
+    expect(dom.closest(btnA, ".not-here")).toBe(0);
+  });
+
+  it("selector parse error bubbles as napi error", () => {
+    const dom = new PerrrDom();
+    expect(() => dom.matches(dom.documentId(), "::before")).toThrow(/pseudo-element/i);
+  });
 });

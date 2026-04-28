@@ -68,10 +68,11 @@ last-reviewed: 2026-04-28
 - Listener callbacks: listener registration returns a `listener_id: u32`; JS side owns a `Map<listener_id, fn>` and is called from Rust via a pre-registered env callback.
 
 ## Tests
-- `tests/tree_invariants.rs` — `proptest`: random mutation sequences preserve parent/child consistency; `free_node` frees all descendants.
-- `tests/event_dispatch.rs` — capture/target/bubble order; `stopPropagation`; `stopImmediatePropagation`; `preventDefault`.
-- `tests/queries.rs` — selector matching: `*`, type, class, id, `:not`, attribute, descendant combinator, on a fixed fixture tree.
-- Indirect: `fixtures/acceptance/components/accordion.test.tsx` exercises end-to-end.
+- `tests/basic.rs` — 19 unit tests for tree, attributes, siblings, text, focus, listener counter.
+- `tests/tree_invariants.rs` — 3 proptest cases: random mutation sequences preserve parent/child consistency; `free_node` frees all descendants.
+- `tests/selectors.rs` — 11 unit tests: `*`, type, class, id, attribute operators, `:not`, combinators (descendant / child / adjacent / sibling), selector list, `querySelector`, `querySelectorAll`, `closest`, unsupported-feature rejection.
+- `tests/event_dispatch.rs` — TBD (M2 event system, next round).
+- Indirect: `fixtures/acceptance/components/accordion.test.tsx` exercises end-to-end via happy-dom backend pending native facade swap.
 
 ## Open
 - Namespace handling: full XML namespaces or HTML-only for v0.1. Lean: HTML-only; namespaces map to fixed strings. Revisit if SVG fixtures appear.
@@ -79,3 +80,5 @@ last-reviewed: 2026-04-28
 
 ## Changelog
 - 2026-04-28: initial draft (M2 planning).
+- 2026-04-28: 4d.i shipped tree + Tier 1+2 ops (22 tests green).
+- 2026-04-28: 4e.i shipped hand-rolled CSS selector subset (parse + matches + querySelector{,All} + closest); 11 more tests. Not using `selectors` crate — targeted at accordion fixture scope, trades spec completeness for implementation simplicity.
