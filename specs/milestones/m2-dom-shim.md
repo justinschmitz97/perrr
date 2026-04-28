@@ -154,4 +154,8 @@ last-reviewed: 2026-04-28
 - 2026-04-28: 4d.i perrr-dom crate (tree + attributes + walks + mutations + text + focus + listener counter; 22 Rust tests).
 - 2026-04-28: 4d.ii perrr-node exposes 36 napi methods on `PerrrDom` class (11 JS tests green).
 - 2026-04-28: 4e.i hand-rolled CSS selector subset (parse/match/query/closest; 11 Rust tests, 2 JS tests).
-- 2026-04-28: 4e.ii differential harness `perrr-dom-shim/dual`. Runs every DOM mutation through both happy-dom AND perrr-dom, serializes both trees, throws on any byte divergence. Strict mode (per-op verify) validates **4,196 mutations with 0 divergence** on accordion.test.tsx. Detector self-test (4 sanity cases) proves it fires on real divergence — not a sham. perrr-dom tree mutation semantics now measured equivalent to happy-dom for the Tier 1+2+3 surface.
+- 2026-04-28: 4e.ii differential harness `perrr-dom-shim/dual`. Two-sided detector: mutation-side (hooks appendChild/insertBefore/removeChild/replaceChild/setAttribute/removeAttribute/toggleAttribute/CharacterData setters, serializes + diffs full trees) and read-side (hooks matches/closest/querySelector/querySelectorAll, compares results via HD↔native bimap). Measured on accordion.test.tsx strict mode:
+  - **4,197 tree mutations per-op verified, 0 divergences**
+  - **5,637 selector queries per-call verified, 0 divergences**
+  - **6 detector self-tests proving both paths fire** on injected divergence (native-only attr mutation, HD-only innerHTML set, native-only selector-affecting flip).
+  - Totals: **9,834 equivalence assertions, zero deltas** → perrr-dom tree + selector semantics empirically equivalent to happy-dom for the accordion fixture.

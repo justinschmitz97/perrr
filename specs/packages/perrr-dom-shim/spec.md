@@ -76,7 +76,7 @@ last-reviewed: 2026-04-28
 - `installDualBackend` hooks: `createElement{,NS}`, `createTextNode`, `createComment`, `createDocumentFragment`, `appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `setAttribute`, `removeAttribute`, `toggleAttribute`, `CharacterData.data`/`nodeValue` setters.
 - Env vars: `PERRR_DUAL=1` (teardown-only verify), `PERRR_DUAL_STRICT=1` (per-op verify). Both emit `.perrr/dual-report.json`.
 - State on `globalThis.__perrr_dual_state__` so it crosses vitest's env↔test-file module boundary.
-- Validated on 2026-04-28: **accordion.test.tsx runs 4,196 mutations in strict mode with zero divergence.**
+- Validated on 2026-04-28: accordion.test.tsx runs **4,197 tree-shape mutations + 5,637 selector-query results** verified, zero divergence. Read-side hooks (matches / closest / querySelector{,All}) compare per-call results via the HD↔native bimap; detector self-test proves the read-divergence path fires.
 
 ## Open
 - Exact prototype-chain shape required by React 19's internals (e.g. whether `Element.prototype.attachInternals` needs to exist). Resolve during M2a miss-log.

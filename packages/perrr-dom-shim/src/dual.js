@@ -29,6 +29,7 @@ function getGlobal() {
       patches: new Map(),
       strict: false,
       opCounter: 0,
+      queryCounter: 0,
     };
   }
   return g[GLOBAL_KEY];
@@ -298,6 +299,25 @@ export function installDualBackend(options = {}) {
   // ----- Text node data setter.
 
   patchDataSetter();
+
+  // ----- Read-side: verify queries agree between backends.
+  patchQuery("matches", function (selector) {
+    const id = idOf.get(this);
+    if (id == null) return;
+    return { id, selector: String(selector) };
+  });
+
+  patchQuery("closest", function (selector) {
+    const id = idOf.get(this);
+    if (id == null) return;
+    return { id, selector: String(selector) };
+  });
+
+  // querySelector + querySelectorAll live on both Element and Document;
+  // Document inherits from Node in happy-dom but the methods are on the
+  // Element mixin. Patch both prototypes if present and distinct.
+  patchSelectorQuery("querySelector", false);
+  patchSelectorQuery("querySelectorAll", true);
 }
 
 function patchCreate(docInstance, method, nativeCall, idOf, nodeOf) {
@@ -353,6 +373,166 @@ function patchAttr(method, mirror) {
       return result;
     },
   });
+}
+
+/**
+ * Patch a boolean-returning query method (`matches`, `closest`) on
+ * Element.prototype. `extractNativeArgs` returns `{ id, selector }` or
+ * undefined (to skip this call).
+ *
+ * For `matches`: HD returns bool; native returns bool. Compare.
+ * For `closest`: HD returns Element | null; native returns NodeId (0
+ * == null). Compare after bimap translation.
+ */
+function patchQuery(method, extractNativeArgs) {
+  const ElProto = globalThis.Element?.prototype;
+  if (!ElProto) return;
+  const original = ElProto[method];
+  if (typeof original !== "function") return;
+  patch(ElProto, method, {
+    configurable: true,
+    writable: true,
+    value: function (...args) {
+      const hdResult = original.apply(this, args);
+      const extracted = extractNativeArgs.apply(this, args);
+      if (extracted) {
+        compareQueryResult(method, this, args, hdResult, extracted);
+      }
+      return hdResult;
+    },
+  });
+}
+
+function compareQueryResult(method, self, args, hdResult, extracted) {
+  const s = getState();
+  if (!s) return;
+  const { id, selector } = extracted;
+  getGlobal().queryCounter = (getGlobal().queryCounter ?? 0) + 1;
+  let ntResult;
+  try {
+    if (method === "matches") ntResult = s.native.matches(id, selector);
+    else if (method === "closest") ntResult = s.native.closest(id, selector);
+    else throw new Error(`patchQuery: unknown method ${method}`);
+  } catch (e) {
+    pushDivergence({
+      kind: "read-throw",
+      op: method,
+      selector,
+      error: String(e),
+    });
+    return;
+  }
+  if (method === "matches") {
+    if (hdResult !== ntResult) {
+      pushDivergence({
+        kind: "read-divergence",
+        op: "matches",
+        selector,
+        hdResult,
+        ntResult,
+      });
+    }
+  } else if (method === "closest") {
+    const hdId = hdResult == null ? 0 : s.idOf.get(hdResult) ?? null;
+    if (hdId == null) {
+      pushDivergence({
+        kind: "read-translation-miss",
+        op: "closest",
+        selector,
+        note: "HD returned a node not in bimap",
+      });
+    } else if (hdId !== ntResult) {
+      pushDivergence({
+        kind: "read-divergence",
+        op: "closest",
+        selector,
+        hdId,
+        ntResult,
+      });
+    }
+  }
+}
+
+function patchSelectorQuery(method, many) {
+  const targets = new Set();
+  const pushProto = (obj) => {
+    const proto = obj?.prototype;
+    if (proto && typeof proto[method] === "function") targets.add(proto);
+  };
+  pushProto(globalThis.Element);
+  pushProto(globalThis.Document);
+  pushProto(globalThis.DocumentFragment);
+
+  for (const proto of targets) {
+    const original = proto[method];
+    patch(proto, method, {
+      configurable: true,
+      writable: true,
+      value: function (selector) {
+        const hdResult = original.call(this, selector);
+        const s = getState();
+        if (s) {
+          const id = s.idOf.get(this);
+          if (id != null) {
+            compareSelectorQueryResult(method, many, s, id, String(selector), hdResult);
+          }
+        }
+        return hdResult;
+      },
+    });
+  }
+}
+
+function compareSelectorQueryResult(method, many, s, id, selector, hdResult) {
+  getGlobal().queryCounter = (getGlobal().queryCounter ?? 0) + 1;
+  let ntResult;
+  try {
+    ntResult = many
+      ? s.native.querySelectorAll(id, selector)
+      : s.native.querySelector(id, selector);
+  } catch (e) {
+    pushDivergence({
+      kind: "read-throw",
+      op: method,
+      selector,
+      error: String(e),
+    });
+    return;
+  }
+  if (many) {
+    const hdIds = Array.from(hdResult ?? []).map((n) => s.idOf.get(n) ?? 0);
+    const ntIds = ntResult;
+    if (
+      hdIds.length !== ntIds.length ||
+      hdIds.some((x, i) => x !== ntIds[i])
+    ) {
+      pushDivergence({
+        kind: "read-divergence",
+        op: method,
+        selector,
+        hdIds,
+        ntIds,
+      });
+    }
+  } else {
+    const hdId = hdResult == null ? 0 : s.idOf.get(hdResult) ?? null;
+    if (hdId == null) {
+      pushDivergence({
+        kind: "read-translation-miss",
+        op: method,
+        selector,
+        note: "HD returned a node not in bimap",
+      });
+    } else if (hdId !== ntResult) {
+      pushDivergence({
+        kind: "read-divergence",
+        op: method,
+        selector,
+        hdId,
+        ntResult,
+      });
+    }
+  }
 }
 
 function patchDataSetter() {
@@ -491,6 +671,7 @@ export function verifyDualShapes() {
     mirrorThrows: g.divergences.length,
     strict: g.strict,
     mutationsChecked: g.opCounter,
+    queriesChecked: g.queryCounter ?? 0,
   };
 }
 
@@ -511,6 +692,7 @@ export function disposeDualBackend() {
   const g = getGlobal();
   g.strict = false;
   g.opCounter = 0;
+  g.queryCounter = 0;
 }
 
 export function nativeInstance() {

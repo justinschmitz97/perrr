@@ -78,4 +78,56 @@ describe.skipIf(!dualMode)("dual harness self-test", () => {
       expect(stats2.mutationsChecked).toBeGreaterThan(stats1.mutationsChecked);
     }
   });
+
+  it("query counter advances on matches/querySelector calls", async () => {
+    const { getDivergences: getDivs, clearDivergences } = await import(
+      // @ts-expect-error
+      "perrr-dom-shim/dual"
+    );
+    clearDivergences();
+    const baseStats = verifyDualShapes();
+    const el = document.createElement("button");
+    el.setAttribute("data-state", "open");
+    document.body.appendChild(el);
+    // Real-world query shapes from the accordion harvest.
+    el.matches("[data-state=open]");
+    el.matches("button");
+    el.closest("[data-state]");
+    document.querySelector("button");
+    document.querySelectorAll("[data-state]");
+    const afterStats = verifyDualShapes();
+    expect(afterStats.queriesChecked).toBeGreaterThan(baseStats.queriesChecked);
+    expect(getDivs().length).toBe(0);
+    el.remove();
+  });
+
+  it("query detector fires on injected native-side divergence", async () => {
+    // @ts-expect-error
+    const { getDivergences: getDivs, clearDivergences } = await import(
+      "perrr-dom-shim/dual"
+    );
+    clearDivergences();
+    const el = document.createElement("button");
+    el.setAttribute("data-state", "open");
+    document.body.appendChild(el);
+
+    const native = nativeInstance();
+    const id = getDualIdOf(el);
+
+    // Inject: flip native attr so HD and native disagree on an attr
+    // that selector matchers care about.
+    native!.setAttribute(id!, "data-state", "closed");
+
+    el.matches("[data-state=open]");
+
+    const divs = getDivs();
+    const readDivs = divs.filter((d: any) => d.kind === "read-divergence");
+    expect(readDivs.length).toBeGreaterThan(0);
+    expect(readDivs[0].op).toBe("matches");
+
+    // Restore parity.
+    native!.setAttribute(id!, "data-state", "open");
+    el.remove();
+    clearDivergences();
+  });
 });
