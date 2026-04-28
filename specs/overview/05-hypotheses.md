@@ -32,15 +32,14 @@ related:
 - **Generalization warning:** zero counters in the trackers mean zero calls *on accordion.test.tsx*. Other fixtures (modals, forms, virtualized lists) WILL exercise some of these paths. When we widen fixture scope, rerun trackers first; mirror before cutting happy-dom.
 
 ### H2 — "perrr-dom selector matcher produces identical results to happy-dom for realistic queries"
-- **Evidence:** 5,637 matches/querySelector/closest calls, zero divergence.
-- **Scope of evidence:** the exact selector strings RTL + radix + motion passed in the accordion fixture. Not a broad corpus.
-- **Counter-hypotheses:**
-  - **H2a:** Selectors the harvest never hit (`:first-child`, `:last-child`, `:nth-*`, `:hover`, `:focus-visible`, `:has()`, `:is()`, `:where()`, Unicode selectors, escaped identifiers) are unsupported by perrr-dom but called by user code in other fixtures. If we expand to more fixtures later, new divergences will appear.
-  - **H2b:** Attribute-operator edge cases (empty value, case-insensitive flag `i`, DashMatch semantics across "-" boundaries) might disagree. The harvest only covered `=`, `~=`, `^=`, `$=`, `*=` and none of the quoting edge cases.
-  - **H2c:** `Element.matches(invalidSelector)` — happy-dom throws a SyntaxError; perrr-dom throws a `ParseError`. Different error types / messages could break code that catches specific errors. **Low-risk, worth noting.**
-- **Test plan:**
-  - Expand selector unit tests with `:is()`-shaped edge cases: `[a="b c" i]`, `[a|=val]` across a-b-c / a-bc, `.` with escaped dots, long tag names with dashes.
-  - For each, compare perrr-dom to happy-dom in a standalone script.
+- **Status: refined — found HD bug; perrr-dom is MORE spec-correct in one case.**
+- **Evidence (post-iteration):** 5,637 real-fixture queries with zero divergence + broad fuzz corpus (~40 selectors × ~10 nodes × 4 query methods ≈ 500+ paired comparisons).
+- **Counter-hypotheses outcomes:**
+  - **H2a:** partially refuted. The fuzz corpus added: `:not` with multiple negations, combinator variants, attribute operators with quoted/unquoted values, comma-lists with no-match components, tag-case-insensitivity, sibling combinators. All perrr-dom matches HD for these — except the one HD bug noted below. Unsupported selectors (`:first-child`, `:nth-*`, `:has`, `:is`, `:where`) remain genuinely unsupported by perrr-dom and throw ParseError; fuzz does not include them. Claim limited to *supported subset*.
+  - **H2b:** not directly tested. `[a|=val]` boundary and case-insensitive flag `i` would need dedicated corpus; not critical for accordion.
+  - **H2c:** still open (error type).
+- **Finding (HD bug):** `querySelectorAll("button ~ a")` — happy-dom returns the matching `a` twice (appears to emit one result per matching preceding button sibling); CSS spec requires dedup. perrr-dom correctly returns one. Captured in `selector-fuzz.test.ts → "H2 exception: perrr-dom dedupes…"`. Implication: when we cut happy-dom, any code depending on HD's duplicated result will break. Scan fixtures before swap. Listed in action queue.
+- **Test plan (remaining):** selector.rs Rust tests with `[a="b c" i]`, `[a|=val]` across a-b-c/a-bc boundary, escaped identifier characters.
 
 ### H3 — "NodeId reuse-after-free is safe because each test resets"
 - **Evidence:** All tests pass. `free_node` correctly frees descendants (proptest). Per-test `afterEach(cleanup)` removes body children.
@@ -107,3 +106,4 @@ related:
 ## Changelog
 - 2026-04-28: initial (7 hypotheses).
 - 2026-04-28: round 4e.iii — H1 trackers discovered H1d (textContent unmirrored), fixed + regression-tested. H4a/H4b confirmed via sanity tests. Added new open hypotheses H8/H9/H10 based on adversarial review.
+- 2026-04-28: round 4e.iv — H2 selector fuzz (~500 paired comparisons). Found HD bug on `button ~ a` (HD returns duplicate; perrr-dom correct). H2 refined: claim narrowed to "supported subset, measured on accordion fixture + fuzz corpus"; HD bug flagged as a real delta to watch for when cutting happy-dom.

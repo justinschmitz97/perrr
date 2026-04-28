@@ -17,6 +17,7 @@ export default defineConfig({
     include: [
       `${fixturesDir}/components/**/*.test.tsx`,
       "./test/dual-sanity.test.ts",
+      "./test/selector-fuzz.test.ts",
     ],
     globals: false,
   },
