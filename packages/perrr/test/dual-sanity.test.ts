@@ -196,6 +196,24 @@ describe.skipIf(!dualMode)("dual harness self-test", () => {
     void hdThrew;
   });
 
+  it("H8 — mixed-case HTML attribute names agree between backends", () => {
+    // HTML attribute names are supposed to be case-insensitive (per
+    // spec stored in ASCII-lowercase form). If HD lowercases on set
+    // but perrr-dom preserves, the serialized trees diverge.
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    el.setAttribute("Data-State", "OPEN");
+    el.setAttribute("ARIA-expanded", "true");
+    // Shape check: if HD and perrr-dom normalize differently, this
+    // throws (name ordering in the serializer would also surface it).
+    expect(() => verifyDualShapes()).not.toThrow();
+    // Both sides should report the attribute under its lowercase
+    // lookup name (HTML-spec behavior). If either side is case-sensitive
+    // on READ, this fails.
+    expect(el.getAttribute("data-state")).toBe(el.getAttribute("Data-State"));
+    el.remove();
+  });
+
   it.skipIf(!strictMode)("strict mode throws at the op that introduces divergence", async () => {
     // @ts-expect-error
     const { clearDivergences } = await import("perrr-dom-shim/dual");

@@ -170,18 +170,38 @@ impl Tree {
     // Attribute ops
     // --------------------------------------------------------------
 
+    /// Normalize an attribute name for an HTML-namespace element: lowercase.
+    /// For other namespaces (e.g. SVG), return the name unchanged.
+    fn normalize_attr_name(&self, id: NodeId, name: &str) -> String {
+        match self.node(id) {
+            Some(n) if n.namespace_uri == HTML_NS => name.to_ascii_lowercase(),
+            _ => name.to_string(),
+        }
+    }
+
     pub fn get_attribute(&self, id: NodeId, name: &str) -> Option<&str> {
         let node = self.node(id)?;
+        let lookup = if node.namespace_uri == HTML_NS {
+            name.to_ascii_lowercase()
+        } else {
+            name.to_string()
+        };
         node.attributes
             .iter()
-            .find(|a| a.name == name)
+            .find(|a| a.name == lookup)
             .map(|a| a.value.as_str())
     }
 
     pub fn has_attribute(&self, id: NodeId, name: &str) -> bool {
-        self.node(id)
-            .map(|n| n.attributes.iter().any(|a| a.name == name))
-            .unwrap_or(false)
+        let Some(node) = self.node(id) else {
+            return false;
+        };
+        let lookup = if node.namespace_uri == HTML_NS {
+            name.to_ascii_lowercase()
+        } else {
+            name.to_string()
+        };
+        node.attributes.iter().any(|a| a.name == lookup)
     }
 
     pub fn set_attribute(
@@ -190,7 +210,7 @@ impl Tree {
         name: impl Into<String>,
         value: impl Into<String>,
     ) -> Result<(), DomError> {
-        let name = name.into();
+        let name = self.normalize_attr_name(id, &name.into());
         let value = value.into();
         let node = self.node_mut(id).ok_or(DomError::InvalidNode(id))?;
         if let Some(existing) = node.attributes.iter_mut().find(|a| a.name == name) {
@@ -202,8 +222,9 @@ impl Tree {
     }
 
     pub fn remove_attribute(&mut self, id: NodeId, name: &str) -> Result<(), DomError> {
+        let lookup = self.normalize_attr_name(id, name);
         let node = self.node_mut(id).ok_or(DomError::InvalidNode(id))?;
-        node.attributes.retain(|a| a.name != name);
+        node.attributes.retain(|a| a.name != lookup);
         Ok(())
     }
 
