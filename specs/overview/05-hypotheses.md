@@ -42,13 +42,12 @@ related:
 - **Test plan (remaining):** selector.rs Rust tests with `[a="b c" i]`, `[a|=val]` across a-b-c/a-bc boundary, escaped identifier characters.
 
 ### H3 — "NodeId reuse-after-free is safe because each test resets"
-- **Evidence:** All tests pass. `free_node` correctly frees descendants (proptest). Per-test `afterEach(cleanup)` removes body children.
-- **Counter-hypotheses:**
-  - **H3a:** A test retains a NodeId in a closure (e.g. via React's internal fiber reference) past a cleanup boundary, then queries it. If the ID was reused, we'd return data for a different node. Silent correctness bug.
-  - **H3b:** Our `free_node` recurses via explicit stack — if a node ID appears twice in a subtree due to a tree corruption, we'd double-free, possibly panicking. Protested against via invariants test but not via fuzz-replay.
-- **Test plan:**
-  - Write a Rust test that creates node A, frees it, creates node B that may reuse A's id, queries both — assert that the reused id's data matches B, not A.
-  - Consider adding a generation counter (u32 top-bits) to catch stale IDs; measure overhead; decide.
+- **Status: refined (behavior documented + guarded).**
+- **Evidence:** `tests/stale_ids.rs` (4 cases): stale reads return None; reuse returns new node's data (documented footgun); out-of-range ids never panic; mutations on stale ids return Err, don't corrupt.
+- **Counter-hypotheses outcomes:**
+  - **H3a:** confirmed as a real footgun — AND documented in a test. Caller holding a stale NodeId across a free+reuse sees the NEW node's data. Current mitigation: (a) one Tree per test context via vitest env setup+teardown; (b) the dual harness's `idOf` bimap is a WeakMap, so HD GCs cascade into native reuse with matched JS lifetimes; (c) React+RTL+radix+motion don't retain NodeIds.
+  - **H3b:** partially confirmed — `free_node` uses explicit stack but DOESN'T guard against duplicate IDs in the stack. If a tree were corrupted (impossible via public API), the worst case is a second `nodes[id] = None` (idempotent) + double-pushing to the free_list (harmless). No panic. Guarded implicitly by invariants proptest.
+- **Upgrade path:** if a future fixture surfaces a real stale-id bug, add a `generation: u32` counter on each slot; NodeId becomes `(gen << 32) | slot`. ~5% memory overhead, trivially catches stale references. Do NOT pre-emptively add; wait for a failing test.
 
 ### H4 — "The dual harness's detector actually catches all classes of divergence"
 - **Status: partially confirmed.**
@@ -90,7 +89,7 @@ related:
 2. ~~**H4 — missed-mirror counter.**~~ done 2026-04-28.
 3. ~~**H6 / H4a — forced-throw drift test.**~~ done 2026-04-28 (H4a sanity test).
 4. **H2 selector edge cases.** Expand selectors.rs tests with `:first-child`, `[a|=x]` boundary, case-insensitive flag, escaped identifiers. Open.
-5. **H3 stale-id test.** Rust test that exercises free + reuse + stale-id query. Open.
+5. ~~**H3 stale-id test.**~~ done 2026-04-28. Behavior documented + guarded; generation counter deferred until a real bug demands it.
 6. ~~**H8 attribute case-sensitivity.**~~ done 2026-04-28. Bug found + fixed.
 7. **H9 (new) activeElement tracking parity.** `document.activeElement` not hooked in dual harness; not differentially compared. Open.
 8. **H10 (new) event dispatch parity.** When native event dispatch lands, compare HD vs native dispatch order + preventDefault semantics. Open.
@@ -108,3 +107,4 @@ related:
 - 2026-04-28: round 4e.iii — H1 trackers discovered H1d (textContent unmirrored), fixed + regression-tested. H4a/H4b confirmed via sanity tests. Added new open hypotheses H8/H9/H10 based on adversarial review.
 - 2026-04-28: round 4e.iv — H2 selector fuzz (~500 paired comparisons). Found HD bug on `button ~ a` (HD returns duplicate; perrr-dom correct). H2 refined: claim narrowed to "supported subset, measured on accordion fixture + fuzz corpus"; HD bug flagged as a real delta to watch for when cutting happy-dom.
 - 2026-04-28: round 4e.v — **H8 refuted ⇒ bug fixed.** Explicit mixed-case attribute test caught a perrr-dom bug: HTML attribute names were stored as given rather than lowercased per HTML spec. Serialized trees diverged. Fix: `Tree::set_attribute` now lowercases when the element's namespace is HTML; `get_attribute` / `has_attribute` / `remove_attribute` lowercase the lookup name for HTML elements. SVG namespace preserves case. New Rust test file `tests/attr_case.rs` (5 cases) + the dual-harness `H8` test both green. Re-run strict on accordion: 4,351 mutations, 5,637 queries, 0 divergences — case-sensitivity bug was masked on the accordion fixture because all RTL/radix/motion attrs are already lowercase, but would have broken on any user who wrote mixed-case HTML.
+- 2026-04-28: round 4e.vi — H3 stale-id behavior documented + guarded. 4 Rust tests in `tests/stale_ids.rs` cover: stale reads → None, reuse → new data (footgun), out-of-range → no panic, mutations on stale → Err (no corruption). No bug found; generation counter NOT added — wait for a failing test to justify the overhead.
