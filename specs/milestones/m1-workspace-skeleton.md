@@ -68,11 +68,12 @@ last-reviewed: 2026-04-27
 
 ## Done-when
 - [x] `pnpm install && pnpm build && pnpm test` green locally on Windows.
-- [ ] CI green on all 6 target triples. _(Pending — no remote configured yet.)_
-- [ ] Prebuilt `.node` artifacts downloadable from the workflow run. _(Blocked by above.)_
+- [x] Remote configured (2026-04-28: `github.com/justinschmitz97/perrr`).
+- [/] CI green on all 6 target triples. _(4/6 passing as of 4e.vii: windows-msvc, linux-x64-gnu, mac-x64, mac-arm64. Docker jobs — aarch64-linux-gnu, linux-x64-musl — blocked on corepack signature issue in the napi-rs docker image; fix landed but not yet verified on a clean run.)_
+- [/] Prebuilt `.node` artifacts downloadable from the workflow run. _(4 triples uploading artifacts currently; 2 blocked behind docker fix.)_
 - [x] `specs/crates/perrr-node/spec.md` created.
 - [x] PR-equivalent commit messages contain the `Spec updated:` line.
-- [ ] On merge: archive spec. _(Blocked by no-remote; M1 scope verified locally but not yet "merged" in the git sense.)_
+- [ ] On merge: archive spec. _(Trunk development; M1 is retroactively "shipped" once the last 2 CI triples go green; archival after.)_
 
 ## Tests
 - `crates/perrr-node/tests/hello.rs` — `#[test] assert_eq!(hello(), "ok");`
@@ -88,3 +89,4 @@ last-reviewed: 2026-04-27
 - 2026-04-28: bumped to latest stable everywhere (Rust `1.95.0`; `napi` / `napi-derive` Rust crates `^3`). Reason: `napi-build@2.3.1` requires rustc ≥1.88; also aligns with project policy of tracking current stable.
 - 2026-04-28: added explicit `vite ^8.0.8` devDep to `packages/perrr`. Reason: Vitest 4 peer-depends on Vite 6/7/8; pnpm resolved a transitive Vite 5 which broke `./module-runner` export at runtime.
 - 2026-04-28: done-when status updated — local criteria satisfied; CI/remote criteria remain blocked pending git remote. Spec stays `approved` until archival on merge.
+- 2026-04-28: remote added (`github.com/justinschmitz97/perrr`). First CI run: 3 pass (cargo test, lint, linux-x64-gnu build), 2 failed on pnpm version conflict (fixed: remove action pin, use packageManager field), 1 failed on cargo test linking N-API symbols (fixed: exclude perrr-node from workspace test). Second run: 4 native triples green (win-x64, mac-x64, mac-arm64, linux-x64-gnu); 2 docker triples (aarch64-linux-gnu, linux-x64-musl) fail on corepack signature verification in napi-rs docker image (fix: install pnpm via npm, skip corepack; verification pending).

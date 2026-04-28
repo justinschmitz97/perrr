@@ -271,10 +271,11 @@ All of Tier 1+2 reachability implies these ARE called; M2c implementation plan c
 | Metadata reads (nodeType, localName, tagName, nodeName, namespaceURI, parentNode, parentElement, ownerDocument, rootNode, first/last/next/previous/childNodes, contains) | ✓ | indirect (shape checks catch any difference) |
 | Attribute ops (getAttribute, hasAttribute, setAttribute, removeAttribute, attributeNames, idAttr) | ✓ (HTML lowercase; SVG preserves case) | ✓ (H8 regression test + strict shape check) |
 | Selector queries (matches, querySelector, querySelectorAll, closest) | ✓ | ✓ (5,637 real-fixture queries + ~500 fuzz queries; one HD bug found — see H2) |
-| Focus tracking (focus, blur, activeElement) | ✓ | partial (H9 open — activeElement not differentially compared) |
+| Focus tracking (focus, blur, activeElement) | ✓ | ✓ (H9 closed; activeElement spec-compliant; dual harness verifies on every read) |
 | Text content | ✓ | ✓ (after H1d fix; 158 previously-unmirrored setter calls now verified per-op) |
 | Listener counter (incrListener, decrListener, listenerCount, totalListenerCount) | ✓ | no HD equivalent (perrr-specific metric for M8) |
-| Event dispatch (addEventListener, removeEventListener, dispatchEvent, capture/target/bubble, preventDefault, stopPropagation) | ✗ | ✗ (H10 open — deferred to event-system milestone) |
+| addEventListener / removeEventListener | ✓ (counter only, no storage) | ✓ (H10a closed; listener counter mirrored, dedup per spec) |
+| Event dispatch (dispatchEvent, capture/target/bubble, preventDefault, stopPropagation) | ✗ | ✗ (H10b open — deferred to event-system milestone; HD still handles actual dispatch) |
 | Layout APIs (getBoundingClientRect, offsetWidth/Height, clientWidth/Height, scrollWidth/Height) | ✗ | ✗ (stubbed zeros; M4 work) |
 | getComputedStyle | ✗ | ✗ (stubbed; M3 work) |
 | MutationObserver / ResizeObserver / IntersectionObserver / PerformanceObserver | ✗ | ✗ (noop stubs; M7 for PerformanceObserver, later for others if fixtures demand) |

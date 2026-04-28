@@ -68,7 +68,9 @@ last-reviewed: 2026-04-28
 **Mutate (tree):** `Node.appendChild`, `insertBefore`, `removeChild`, `replaceChild`.
 **Mutate (attrs):** `Element.setAttribute`, `removeAttribute`, `toggleAttribute`.
 **Mutate (text):** `CharacterData.data`/`nodeValue` setters, `Element.textContent` setter (added 4e.iii after tracker found 158 unmirrored calls).
-**Read-compare:** `Element.matches`, `closest`; `Element.querySelector`/`All`, `Document.querySelector`/`All`, `DocumentFragment.querySelector`/`All`.
+**Mutate (focus):** `HTMLElement.focus`, `HTMLElement.blur` (added in H9; mirrors to `native.focus`/`native.blur`).
+**Mutate (events):** `EventTarget.addEventListener` / `removeEventListener` (H10a; mirror increments/decrements the perrr-dom listener counter. IMPORTANT: patches the EventTarget discovered by walking `document`'s prototype chain — `globalThis.EventTarget.prototype` is a DIFFERENT object in happy-dom and patching it has no effect on nodes).
+**Read-compare:** `Element.matches`, `closest`; `Element.querySelector`/`All`, `Document.querySelector`/`All`, `DocumentFragment.querySelector`/`All`; `Document.activeElement` getter (H9).
 **Trackers (count only, no mirror):** `Element.innerHTML`/`outerHTML`/`insertAdjacentHTML`/`insertAdjacentElement`/`insertAdjacentText` setters; `Element.remove`/`before`/`after`/`replaceWith`/`append`/`prepend`/`replaceChildren`; `Node.normalize`; `DOMTokenList.add`/`remove`/`toggle`/`replace`; `HTMLInputElement.value`/`checked` setters. All count=0 on the accordion fixture.
 
 ## Integration with `vitest-environment-perrr`
@@ -98,12 +100,13 @@ last-reviewed: 2026-04-28
 - `PERRR_HARVEST=1` — prototype call counters. Writes `.perrr/miss-log.json`.
 - All three emit `.perrr/dual-report.json` or `.perrr/miss-log.json` for post-mortem.
 
-## Measured outcome (2026-04-28, post-round-4e.vi, strict mode on accordion.test.tsx)
-- 4,351 tree-shape mutations verified per-op: **0 divergence**.
-- 5,637 selector queries verified per-call: **0 divergence**.
+## Measured outcome (2026-04-28, post-round-4e.vii, strict mode on accordion.test.tsx)
+- **4,411 tree-shape mutations** verified per-op: **0 divergence**.
+- **6,070 queries** (matches/querySelector/closest + activeElement getter): **0 divergence**.
 - 0 mirror throws, 0 bimap misses on real code paths, 0 counts on 14 tracker APIs.
-- 50/52 acceptance tests green (2 strict-mode-incompatible injection tests skipped).
-- 9 detector self-tests all firing correctly on injected divergence.
+- 53/55 acceptance tests green (2 strict-mode-incompatible injection tests skipped).
+- 12 detector self-tests all firing correctly on injected divergence (shape + query + activeElement + bimap-miss + HD-throws + strict-catch).
+- Notable: the activeElement hook surfaced 235 silent divergences on the first run. Root cause was a perrr-dom spec-compliance gap (body default + disconnected-element blur), fixed in the same round.
 
 ## Open
 - M2c facade-native swap: still pending. Dual harness gives us the safety net; when it's run with the native facade active, any divergence is surfaced.
@@ -121,3 +124,5 @@ last-reviewed: 2026-04-28
 - 2026-04-28: 4e.iv selector fuzz corpus (~500 paired comparisons). Found happy-dom bug on `button ~ a` (duplicate results); perrr-dom spec-correct. Documented as a separate test case.
 - 2026-04-28: 4e.v — via dual harness H8 test, caught perrr-dom attribute-case-sensitivity bug. Fix landed in perrr-dom; no change to dom-shim itself.
 - 2026-04-28: removed obsolete design items referencing JS facade classes (`src/nodes.js`, `src/events.js`, `src/document.js`, `src/window.js`, `src/install.js`, `src/logging-proxy.js`); those are M2c scope. Current file layout: `src/index.js`, `src/harvest.js`, `src/dual.js`.
+- 2026-04-28: H9 — added `focus`/`blur` mirrors + `Document.activeElement` read-compare. Found 235 silent divergences on first run (all caused by perrr-dom's non-spec-compliant activeElement default); fix landed in perrr-dom same round.
+- 2026-04-28: H10a — added `addEventListener` / `removeEventListener` mirror that increments the native listener counter. Duplicate (type, listener, capture) deduped per spec. EventTarget prototype resolved by walking `document`'s chain (globalThis.EventTarget is a different object in happy-dom). Full dispatch-path parity (H10b) still open.

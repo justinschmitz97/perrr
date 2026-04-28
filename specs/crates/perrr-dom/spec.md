@@ -36,7 +36,10 @@ last-reviewed: 2026-04-28
 - Tree mutation: `append_child`, `insert_before`, `remove_child`, `free_node` (recursive).
 - Text: `text_content` (recursive concatenation), `set_text_content` (replaces children), `node_data`, `set_node_data`.
 - Selector queries (hand-rolled subset in `selector` module): `matches`, `query_selector`, `query_selector_all`, `closest`. Parse errors surfaced as `SelectorParseError`.
-- Focus tracking: `active_element`, `focus`, `blur`.
+- Focus tracking: `active_element`, `explicitly_focused`, `focus`, `blur`, `is_connected`.
+  - `active_element` follows HTML spec: returns the explicitly-focused element if it's still connected to the document, else body, else `NODE_ID_INVALID`. Disconnected elements are implicitly treated as blurred.
+  - `explicitly_focused` exposes the raw focus-state field without the spec fallback (testing + metrics).
+  - `is_connected(id)` walks parent chain to document.
 - Listener counter: `incr_listener`, `decr_listener`, `listener_count`, `total_listener_count` (drives M8 metric).
 - Deterministic iteration order: `children(id)` returns children in insertion order.
 - Return `Result<T, DomError>` for every fallible op (invalid node, cycle, not-a-child, reference not in parent, wrong kind).
@@ -99,3 +102,4 @@ last-reviewed: 2026-04-28
 - 2026-04-28: 4e.i shipped hand-rolled CSS selector subset (parse + matches + querySelector{,All} + closest); 11 more tests. Not using `selectors` crate — targeted at accordion fixture scope, trades spec completeness for implementation simplicity.
 - 2026-04-28: 4e.v — **bug fix: HTML attribute name case-sensitivity.** HTML elements now lowercase names on set + lookup (spec-compliant); SVG preserves case. Bug caught by dual harness H8 test. Rust tests added in `tests/attr_case.rs`.
 - 2026-04-28: 4e.vi — stale NodeId behavior documented via `tests/stale_ids.rs`. No bug; footgun made explicit. Generation counter upgrade path noted.
+- 2026-04-28: 4e.vii — `active_element` made spec-compliant: defaults to body when nothing is focused; implicitly blurs disconnected elements. Caught by dual harness activeElement read-compare (235 divergences before fix, 0 after). Added `body: NodeId` field, `is_connected(id)`, `explicitly_focused()`. 3 test updates + 1 new test.

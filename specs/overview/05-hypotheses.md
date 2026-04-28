@@ -91,8 +91,8 @@ related:
 4. **H2 selector edge cases.** Expand selectors.rs tests with `:first-child`, `[a|=x]` boundary, case-insensitive flag, escaped identifiers. Open.
 5. ~~**H3 stale-id test.**~~ done 2026-04-28. Behavior documented + guarded; generation counter deferred until a real bug demands it.
 6. ~~**H8 attribute case-sensitivity.**~~ done 2026-04-28. Bug found + fixed.
-7. **H9 (new) activeElement tracking parity.** `document.activeElement` not hooked in dual harness; not differentially compared. Open.
-8. **H10 (new) event dispatch parity.** When native event dispatch lands, compare HD vs native dispatch order + preventDefault semantics. Open.
+7. ~~**H9 activeElement tracking parity.**~~ done 2026-04-28. Dual harness hooks `focus`/`blur` mirror + `Document.activeElement` getter read-compare. Found + fixed 235 silent divergences from a perrr-dom spec-compliance bug (activeElement didn't default to body; didn't implicitly blur disconnected elements).
+8. **H10 event dispatch parity.** H10a partially done (addEventListener / removeEventListener mirror native listener counter). H10b (full dispatch path: capture/target/bubble with preventDefault/stopPropagation semantics) still open. Blocks complete facade-native swap.
 
 ## Numbers-at-a-glance (after round 4e.iii trackers + textContent mirror)
 - Strict mode on accordion.test.tsx:
