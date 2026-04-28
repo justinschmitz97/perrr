@@ -258,16 +258,67 @@ fn disconnected_focused_element_falls_back_to_body() {
     assert!(!tree.is_connected(btn));
 }
 
+fn mk_listener(id: u32, event_type: &str, capture: bool) -> perrr_dom::Listener {
+    perrr_dom::Listener {
+        id,
+        event_type: event_type.into(),
+        capture,
+        once: false,
+        passive: false,
+    }
+}
+
 #[test]
 fn listener_counter_balances() {
     let mut tree = Tree::new();
     let el = tree.create_element("button");
-    tree.incr_listener(el).unwrap();
-    tree.incr_listener(el).unwrap();
+    tree.add_event_listener(el, mk_listener(1, "click", false)).unwrap();
+    tree.add_event_listener(el, mk_listener(2, "keydown", false)).unwrap();
     assert_eq!(tree.listener_count(el), 2);
     assert_eq!(tree.total_listener_count(), 2);
-    tree.decr_listener(el).unwrap();
+    // Remove one listener; count drops.
+    assert!(tree.remove_event_listener(el, "click", 1, false).unwrap());
     assert_eq!(tree.listener_count(el), 1);
     tree.free_node(el);
     assert_eq!(tree.total_listener_count(), 0);
+}
+
+#[test]
+fn add_event_listener_dedup_per_spec() {
+    let mut tree = Tree::new();
+    let el = tree.create_element("button");
+    tree.add_event_listener(el, mk_listener(1, "click", false)).unwrap();
+    // Same (type, id, capture) is a no-op per DOM spec.
+    tree.add_event_listener(el, mk_listener(1, "click", false)).unwrap();
+    assert_eq!(tree.listener_count(el), 1);
+    // Different capture flag → new registration.
+    tree.add_event_listener(el, mk_listener(1, "click", true)).unwrap();
+    assert_eq!(tree.listener_count(el), 2);
+    // Different listener id on same type → new registration.
+    tree.add_event_listener(el, mk_listener(2, "click", false)).unwrap();
+    assert_eq!(tree.listener_count(el), 3);
+}
+
+#[test]
+fn has_listener_of_type_ignores_capture_flag() {
+    let mut tree = Tree::new();
+    let el = tree.create_element("button");
+    tree.add_event_listener(el, mk_listener(1, "click", true)).unwrap();
+    assert!(tree.has_listener_of_type(el, "click"));
+    assert!(!tree.has_listener_of_type(el, "keydown"));
+}
+
+#[test]
+fn remove_event_listener_no_matching_returns_false() {
+    let mut tree = Tree::new();
+    let el = tree.create_element("button");
+    tree.add_event_listener(el, mk_listener(1, "click", false)).unwrap();
+    // Wrong id.
+    assert!(!tree.remove_event_listener(el, "click", 99, false).unwrap());
+    // Wrong type.
+    assert!(!tree.remove_event_listener(el, "nope", 1, false).unwrap());
+    // Wrong capture flag.
+    assert!(!tree.remove_event_listener(el, "click", 1, true).unwrap());
+    // Right match.
+    assert!(tree.remove_event_listener(el, "click", 1, false).unwrap());
 }

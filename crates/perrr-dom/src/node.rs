@@ -35,6 +35,18 @@ pub struct Attr {
 /// Small-vec-like. Linear scan; DOM elements rarely exceed ~10 attrs.
 pub type AttrList = Vec<Attr>;
 
+/// Registered event listener. Identity across the JS↔native boundary
+/// is the (event_type, listener_id, capture) tuple — matches DOM spec's
+/// deduplication rules for addEventListener.
+#[derive(Debug, Clone)]
+pub struct Listener {
+    pub id: u32,
+    pub event_type: String,
+    pub capture: bool,
+    pub once: bool,
+    pub passive: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct Node {
     pub kind: NodeKind,
@@ -44,9 +56,9 @@ pub(crate) struct Node {
     pub namespace_uri: String,
     pub attributes: AttrList,
     pub text: String,
-    /// Count of event listeners attached to this node. Drives the
-    /// listener metric in M8.
-    pub listener_count: u32,
+    /// Registered event listeners. `listener_count(id)` returns
+    /// `listeners.len() as u32`. Drives the M8 listener metric.
+    pub listeners: Vec<Listener>,
 }
 
 impl Node {
@@ -59,7 +71,7 @@ impl Node {
             namespace_uri,
             attributes: AttrList::new(),
             text: String::new(),
-            listener_count: 0,
+            listeners: Vec::new(),
         }
     }
 
@@ -72,7 +84,7 @@ impl Node {
             namespace_uri: String::new(),
             attributes: AttrList::new(),
             text: data,
-            listener_count: 0,
+            listeners: Vec::new(),
         }
     }
 
@@ -85,7 +97,7 @@ impl Node {
             namespace_uri: String::new(),
             attributes: AttrList::new(),
             text: data,
-            listener_count: 0,
+            listeners: Vec::new(),
         }
     }
 
@@ -98,7 +110,7 @@ impl Node {
             namespace_uri: String::new(),
             attributes: AttrList::new(),
             text: String::new(),
-            listener_count: 0,
+            listeners: Vec::new(),
         }
     }
 
@@ -111,7 +123,7 @@ impl Node {
             namespace_uri: String::new(),
             attributes: AttrList::new(),
             text: String::new(),
-            listener_count: 0,
+            listeners: Vec::new(),
         }
     }
 }

@@ -10,7 +10,7 @@
 //! later milestone if benchmarks surface false-positive matches.
 
 use crate::error::DomError;
-use crate::node::{Attr, Node, NodeId, NodeKind, NODE_ID_INVALID};
+use crate::node::{Attr, Listener, Node, NodeId, NodeKind, NODE_ID_INVALID};
 use crate::selector::{self, SelectorList};
 
 const HTML_NS: &str = "http://www.w3.org/1999/xhtml";
@@ -538,30 +538,69 @@ impl Tree {
     }
 
     // --------------------------------------------------------------
-    // Listener counter (drives M8 metric)
+    // Event listeners (registry + M8 counter metric)
     // --------------------------------------------------------------
 
-    pub fn incr_listener(&mut self, id: NodeId) -> Result<(), DomError> {
+    /// Register a listener. DOM spec: (event_type, listener_id, capture)
+    /// is a no-op if already registered.
+    pub fn add_event_listener(
+        &mut self,
+        id: NodeId,
+        listener: Listener,
+    ) -> Result<(), DomError> {
         let node = self.node_mut(id).ok_or(DomError::InvalidNode(id))?;
-        node.listener_count = node.listener_count.saturating_add(1);
+        let already = node.listeners.iter().any(|l| {
+            l.event_type == listener.event_type
+                && l.id == listener.id
+                && l.capture == listener.capture
+        });
+        if !already {
+            node.listeners.push(listener);
+        }
         Ok(())
     }
 
-    pub fn decr_listener(&mut self, id: NodeId) -> Result<(), DomError> {
+    /// Remove a registration matching (event_type, listener_id, capture).
+    /// Returns true if a listener was removed.
+    pub fn remove_event_listener(
+        &mut self,
+        id: NodeId,
+        event_type: &str,
+        listener_id: u32,
+        capture: bool,
+    ) -> Result<bool, DomError> {
         let node = self.node_mut(id).ok_or(DomError::InvalidNode(id))?;
-        node.listener_count = node.listener_count.saturating_sub(1);
-        Ok(())
+        let before = node.listeners.len();
+        node.listeners.retain(|l| {
+            !(l.event_type == event_type && l.id == listener_id && l.capture == capture)
+        });
+        Ok(node.listeners.len() < before)
+    }
+
+    /// True if the node has any listener of the given type (ignoring
+    /// capture flag). Used by dispatch path computation.
+    pub fn has_listener_of_type(&self, id: NodeId, event_type: &str) -> bool {
+        self.node(id)
+            .map(|n| n.listeners.iter().any(|l| l.event_type == event_type))
+            .unwrap_or(false)
+    }
+
+    /// Snapshot of listeners for a node (clone). Use for dispatch.
+    pub fn listeners(&self, id: NodeId) -> Vec<Listener> {
+        self.node(id)
+            .map(|n| n.listeners.clone())
+            .unwrap_or_default()
     }
 
     pub fn listener_count(&self, id: NodeId) -> u32 {
-        self.node(id).map(|n| n.listener_count).unwrap_or(0)
+        self.node(id).map(|n| n.listeners.len() as u32).unwrap_or(0)
     }
 
     pub fn total_listener_count(&self) -> u32 {
         self.nodes
             .iter()
             .filter_map(|n| n.as_ref())
-            .map(|n| n.listener_count)
+            .map(|n| n.listeners.len() as u32)
             .sum()
     }
 

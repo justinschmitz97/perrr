@@ -307,16 +307,52 @@ impl PerrrDom {
         self.tree.active_element()
     }
 
-    // ----- Listener metric -----
+    // ----- Event listeners -----
 
+    /// Register a listener. No-op if (event_type, listener_id, capture)
+    /// already registered per DOM spec dedup.
     #[napi]
-    pub fn incr_listener(&mut self, node: u32) -> Result<()> {
-        self.tree.incr_listener(node).map_err(to_napi_err)
+    pub fn add_event_listener(
+        &mut self,
+        node: u32,
+        event_type: String,
+        listener_id: u32,
+        capture: bool,
+        once: bool,
+        passive: bool,
+    ) -> Result<()> {
+        self.tree
+            .add_event_listener(
+                node,
+                perrr_dom::Listener {
+                    id: listener_id,
+                    event_type,
+                    capture,
+                    once,
+                    passive,
+                },
+            )
+            .map_err(to_napi_err)
+    }
+
+    /// Remove a registration matching (event_type, listener_id, capture).
+    /// Returns true if a listener was removed.
+    #[napi]
+    pub fn remove_event_listener(
+        &mut self,
+        node: u32,
+        event_type: String,
+        listener_id: u32,
+        capture: bool,
+    ) -> Result<bool> {
+        self.tree
+            .remove_event_listener(node, &event_type, listener_id, capture)
+            .map_err(to_napi_err)
     }
 
     #[napi]
-    pub fn decr_listener(&mut self, node: u32) -> Result<()> {
-        self.tree.decr_listener(node).map_err(to_napi_err)
+    pub fn has_listener_of_type(&self, node: u32, event_type: String) -> bool {
+        self.tree.has_listener_of_type(node, &event_type)
     }
 
     #[napi]

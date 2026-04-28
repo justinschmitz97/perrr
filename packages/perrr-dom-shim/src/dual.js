@@ -505,6 +505,20 @@ function patchEventListeners() {
     return false;
   };
 
+  // JS-side monotonic listener-id allocator. Crosses the napi boundary
+  // as a u32 so native can identify the registration. The JS function
+  // itself is never passed to native.
+  const listenerIds = new WeakMap(); // fn → id
+  let nextListenerId = 1;
+  const listenerIdFor = (fn) => {
+    let id = listenerIds.get(fn);
+    if (id == null) {
+      id = nextListenerId++;
+      listenerIds.set(fn, id);
+    }
+    return id;
+  };
+
   patch(EventTarget, "addEventListener", {
     configurable: true,
     writable: true,
@@ -512,15 +526,20 @@ function patchEventListeners() {
       const result = originalAdd.call(this, type, listener, options);
       const s = getState();
       const id = s?.idOf.get(this);
-      if (id == null) {
-        // Ignore non-node targets (Window without bimap entry, etc.).
-        return result;
+      if (id == null) return result; // non-node target
+      if (typeof listener !== "function" && typeof listener?.handleEvent !== "function") {
+        return result; // spec: null/invalid listener is a no-op
       }
       const k = keyOf(type, listener, options);
-      if (has(this, k)) return result; // duplicate — spec says no-op
+      if (has(this, k)) return result; // dedup per spec
       add(this, k);
+      const listenerId = listenerIdFor(listener);
+      const once =
+        typeof options === "object" && options !== null ? !!options.once : false;
+      const passive =
+        typeof options === "object" && options !== null ? !!options.passive : false;
       try {
-        s.native.incrListener(id);
+        s.native.addEventListener(id, k.type, listenerId, k.capture, once, passive);
       } catch (e) {
         pushDivergence({
           kind: "mirror-throw",
@@ -542,9 +561,11 @@ function patchEventListeners() {
       const id = s?.idOf.get(this);
       if (id == null) return result;
       const k = keyOf(type, listener, options);
-      if (!del(this, k)) return result; // no matching registration
+      if (!del(this, k)) return result;
+      const listenerId = listenerIds.get(listener);
+      if (listenerId == null) return result; // never seen
       try {
-        s.native.decrListener(id);
+        s.native.removeEventListener(id, k.type, listenerId, k.capture);
       } catch (e) {
         pushDivergence({
           kind: "mirror-throw",

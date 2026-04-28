@@ -124,15 +124,21 @@ describe("PerrrDom via N-API", () => {
     expect(dom.activeElement()).toBe(body);
   });
 
-  it("listener counter balances through incr/decr/freeNode", () => {
+  it("event listener registry balances through add/remove/freeNode", () => {
     const dom = new PerrrDom();
     const el = dom.createElement("button");
-    dom.incrListener(el);
-    dom.incrListener(el);
+    dom.addEventListener(el, "click", 1, false, false, false);
+    dom.addEventListener(el, "keydown", 2, false, false, false);
     expect(dom.listenerCount(el)).toBe(2);
     expect(dom.totalListenerCount()).toBe(2);
-    dom.decrListener(el);
+    // DOM dedup: same (type, id, capture) is a no-op.
+    dom.addEventListener(el, "click", 1, false, false, false);
+    expect(dom.listenerCount(el)).toBe(2);
+    // Remove by (type, id, capture).
+    expect(dom.removeEventListener(el, "click", 1, false)).toBe(true);
     expect(dom.listenerCount(el)).toBe(1);
+    expect(dom.hasListenerOfType(el, "keydown")).toBe(true);
+    expect(dom.hasListenerOfType(el, "click")).toBe(false);
     dom.freeNode(el);
     expect(dom.totalListenerCount()).toBe(0);
   });
