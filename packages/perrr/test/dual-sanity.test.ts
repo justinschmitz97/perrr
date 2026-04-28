@@ -214,6 +214,55 @@ describe.skipIf(!dualMode)("dual harness self-test", () => {
     el.remove();
   });
 
+  it("H9 — focus/blur mirror + activeElement read-compare", () => {
+    const a = document.createElement("button");
+    const b = document.createElement("button");
+    document.body.appendChild(a);
+    document.body.appendChild(b);
+    // Focus a → activeElement === a on both sides.
+    a.focus();
+    expect(document.activeElement).toBe(a);
+    expect(() => verifyDualShapes()).not.toThrow();
+    // Focus b → activeElement moves.
+    b.focus();
+    expect(document.activeElement).toBe(b);
+    // Blur b → activeElement clears (HD: body or null; native: NODE_ID_INVALID).
+    b.blur();
+    expect(() => verifyDualShapes()).not.toThrow();
+    a.remove();
+    b.remove();
+  });
+
+  it("H9 detector fires on native-only activeElement divergence", async () => {
+    // @ts-expect-error
+    const { getDivergences: gDivs, clearDivergences } = await import(
+      "perrr-dom-shim/dual"
+    );
+    clearDivergences();
+    const a = document.createElement("button");
+    const b = document.createElement("button");
+    document.body.appendChild(a);
+    document.body.appendChild(b);
+    a.focus();
+    // Inject: flip native's activeElement to b without touching HD.
+    const native = nativeInstance();
+    const id_b = getDualIdOf(b);
+    native!.focus(id_b!);
+    // Next activeElement read should trip the detector.
+    void document.activeElement;
+    const divs = gDivs();
+    const ae = divs.filter(
+      (d: any) =>
+        d.kind === "read-divergence" && d.op === "get activeElement",
+    );
+    expect(ae.length).toBeGreaterThan(0);
+    // Restore parity: blur native's b so we match HD (which has a focused).
+    native!.focus(getDualIdOf(a)!);
+    a.remove();
+    b.remove();
+    clearDivergences();
+  });
+
   it.skipIf(!strictMode)("strict mode throws at the op that introduces divergence", async () => {
     // @ts-expect-error
     const { clearDivergences } = await import("perrr-dom-shim/dual");

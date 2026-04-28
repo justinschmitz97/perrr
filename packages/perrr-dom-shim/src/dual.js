@@ -329,6 +329,10 @@ export function installDualBackend(options = {}) {
   // ----- H1 trackers: count unhooked mutation paths.
   installTrackers();
 
+  // ----- H9: focus/blur mirror + activeElement read-compare.
+  patchFocusBlur();
+  patchActiveElementGetter();
+
   // ----- Read-side: verify queries agree between backends.
   patchQuery("matches", function (selector) {
     const id = idOf.get(this);
@@ -426,6 +430,86 @@ function installTrackers() {
   // Form controls.
   trackerWrap(HTMLInput, "value", "HTMLInputElement.set value");
   trackerWrap(HTMLInput, "checked", "HTMLInputElement.set checked");
+}
+
+function patchFocusBlur() {
+  const HTMLElement = globalThis.HTMLElement?.prototype;
+  if (!HTMLElement) return;
+
+  for (const method of ["focus", "blur"]) {
+    const original = HTMLElement[method];
+    if (typeof original !== "function") continue;
+    patch(HTMLElement, method, {
+      configurable: true,
+      writable: true,
+      value: function (...args) {
+        const result = original.apply(this, args);
+        const s = getState();
+        const id = s?.idOf.get(this);
+        if (id == null) {
+          if (s) getGlobal().missedMirrorCount += 1;
+        } else {
+          try {
+            if (method === "focus") s.native.focus(id);
+            else s.native.blur(id);
+          } catch (e) {
+            pushDivergence({
+              kind: "mirror-throw",
+              op: method,
+              error: String(e),
+            });
+          }
+        }
+        maybeVerifyAfterMutation(method, args);
+        return result;
+      },
+    });
+  }
+}
+
+function patchActiveElementGetter() {
+  // `activeElement` may live on Document.prototype rather than the
+  // HTMLDocument subclass globalThis.Document points at. Walk the
+  // prototype chain until we find the descriptor.
+  let proto = globalThis.Document?.prototype ?? null;
+  let original = null;
+  while (proto) {
+    const d = Object.getOwnPropertyDescriptor(proto, "activeElement");
+    if (d && d.get) {
+      original = d;
+      break;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+  if (!original || !proto) return;
+  patch(proto, "activeElement", {
+    configurable: true,
+    enumerable: original.enumerable,
+    get: function () {
+      const hdResult = original.get.call(this);
+      const s = getState();
+      if (s) {
+        getGlobal().queryCounter += 1;
+        const hdId = hdResult == null ? 0 : s.idOf.get(hdResult) ?? null;
+        const ntId = s.native.activeElement();
+        if (hdId == null && hdResult != null) {
+          pushDivergence({
+            kind: "read-translation-miss",
+            op: "get activeElement",
+            note: "HD returned a node not in bimap",
+          });
+        } else if ((hdId ?? 0) !== ntId) {
+          pushDivergence({
+            kind: "read-divergence",
+            op: "get activeElement",
+            hdId: hdId ?? 0,
+            ntId,
+          });
+        }
+      }
+      return hdResult;
+    },
+  });
 }
 
 function patchCreate(docInstance, method, nativeCall, idOf, nodeOf) {
